@@ -28,6 +28,9 @@ ensure_deps: ## Ensure Go module dependencies are tidy
 build: ## Build app
 	@go build -o $(GO_BIN) $(APP)
 
+test: ## Test with the committed module lock
+	@go test -mod=readonly ./internal/configuration ./internal/storage
+
 swagger:
 	@swagger generate server --name PgConsole --spec api/swagger.yaml --principal interface{} --exclude-main
 

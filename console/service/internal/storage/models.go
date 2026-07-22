@@ -166,23 +166,25 @@ type GetExtensionsReq struct {
 }
 
 type Cluster struct {
-	ID             int64
-	ProjectID      int64
-	EnvironmentID  int64
-	SecretID       *int64
-	Name           string
-	Status         string
-	Description    string
-	Location       *string
-	ConnectionInfo interface{}
-	ExtraVars      []byte
-	Inventory      []byte
-	ServersCount   int32
-	PostgreVersion int32
-	CreatedAt      time.Time
-	UpdatedAt      *time.Time
-	DeletedAt      *time.Time
-	Flags          uint32
+	ID                    int64
+	ProjectID             int64
+	EnvironmentID         int64
+	SecretID              *int64
+	Name                  string
+	Status                string
+	Description           string
+	Location              *string
+	ConnectionInfo        interface{}
+	ExtraVars             []byte
+	Inventory             []byte
+	ServersCount          int32
+	PostgreVersion        int32
+	CreatedAt             time.Time
+	UpdatedAt             *time.Time
+	DeletedAt             *time.Time
+	Flags                 uint32
+	QueryAnalyticsManaged bool
+	QueryAnalyticsDesired bool
 }
 
 type GetClustersReq struct {
@@ -309,4 +311,65 @@ type UpdateServerReq struct {
 	Lag            *int64
 	Tags           interface{}
 	PendingRestart *bool
+}
+
+type QueryAnalyticsSource struct {
+	ClusterID        int64
+	ServerID         int64
+	NodeBootTime     *time.Time
+	Status           string
+	ExtensionVersion *string
+	LastBucketStart  *time.Time
+	LastCollectedAt  *time.Time
+	LastErrorCode    *string
+}
+
+type QueryAnalyticsBucket struct {
+	ClusterID         int64
+	ServerID          int64
+	NodeBootTime      time.Time
+	BucketID          int64
+	BucketStart       time.Time
+	BucketEnd         time.Time
+	Complete          bool
+	Calls             int64
+	TotalExecTimeMs   float64
+	MaxExecTimeMs     float64
+	Rows              int64
+	SharedBlocksHit   int64
+	SharedBlocksRead  int64
+	TempBlocksRead    int64
+	TempBlocksWritten int64
+	ReadTimeMs        float64
+	WriteTimeMs       float64
+	WALBytes          int64
+	Samples           []QueryAnalyticsSample
+}
+
+type QueryAnalyticsSample struct {
+	ClusterID         int64
+	ServerID          int64
+	NodeBootTime      time.Time
+	BucketID          int64
+	FingerprintID     string
+	NormalizedQuery   string
+	DatabaseName      string
+	RoleName          string
+	ApplicationName   string
+	Calls             int64
+	TotalExecTimeMs   float64
+	MinExecTimeMs     float64
+	MaxExecTimeMs     float64
+	MeanExecTimeMs    float64
+	Rows              int64
+	SharedBlocksHit   int64
+	SharedBlocksRead  int64
+	TempBlocksRead    int64
+	TempBlocksWritten int64
+	ReadTimeMs        float64
+	WriteTimeMs       float64
+	WALBytes          int64
+	LatencyHistogram  []string
+	TopTotalTime      bool
+	TopMaxLatency     bool
 }

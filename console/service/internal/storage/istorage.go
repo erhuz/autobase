@@ -65,4 +65,9 @@ type IStorage interface {
 	GetClusterServers(ctx context.Context, clusterID int64) ([]Server, error)
 	UpdateServer(ctx context.Context, req *UpdateServerReq) (*Server, error)
 	ResetServer(ctx context.Context, clusterID int64, ipAddress string) (*Server, error)
+
+	// query analytics
+	UpsertQueryAnalyticsSource(ctx context.Context, source *QueryAnalyticsSource) error
+	IngestQueryAnalyticsBucket(ctx context.Context, bucket *QueryAnalyticsBucket) error
+	PurgeQueryAnalyticsBefore(ctx context.Context, before time.Time) (int64, error)
 }
