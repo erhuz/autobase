@@ -3,14 +3,14 @@
 ## §G
 
 G1: extend Autobase Community Console → safe day-2 management for existing HA PostgreSQL clusters.
-G2: v1 → guarded cluster operations; phase 2 → cluster lifecycle; phase 3 → database administration.
+G2: v1 → guarded cluster operations + query-performance observability; phase 2 → cluster lifecycle; phase 3 → database administration.
 G3: ∀ release → direct tested upgrade from unmodified Community `2.9.0`.
 
 ## §C
 
 C1: baseline = Autobase Community `2.9.0`; upstream attribution + MIT license ! preserved; Enterprise code/assets ⊥ copy.
 C2: audience = internal engineers + PostgreSQL operators.
-C3: reuse Console UI → API → DB/operation log → Automation → managed cluster; second orchestration engine ⊥.
+C3: reuse Console UI → API → DB/operation log → Automation → managed cluster; API → PostgreSQL read-only telemetry ?; second orchestration engine ⊥.
 C4: Patroni + DCS authoritative for topology/leadership; pgBackRest authoritative for backup repository state.
 C5: browser-direct host access, SSH credentials, arbitrary shell, unrestricted Ansible ⊥.
 C6: import/discovery read-only against managed cluster; writes limited to Console DB inventory.
@@ -18,7 +18,7 @@ C7: ∀ mutation → current + desired state, preflight, exact plan, affected no
 C8: omitted input → no configuration change.
 C9: secrets, passwords, private keys, tokens, backup credentials ⊥ operation params/logs/API responses.
 C10: operation failure → cluster recoverable + current state + safe next action.
-C11: v1 excludes forced/ambiguous failover, restore/PITR, node scaling, config management, updates/upgrades, database/role/extension/PgBouncer administration.
+C11: v1 excludes forced/ambiguous failover, restore/PITR, node scaling, generic config management, updates/upgrades, database/role/extension/PgBouncer administration; platform-owned `pg_stat_monitor` lifecycle = sole telemetry exception.
 C12: v1 excludes SQL editor, billing/subscriptions/support plans, full cloud-provider parity.
 C13: future release compatibility declared/tested as one `{ui,api,console_db,automation}` version set.
 C14: migrations forward + ordered; Console persistent volume reset ⊥.
@@ -29,14 +29,18 @@ C15: implementation extends existing Swagger, Go service/storage/watchers, React
 doc: `MANAGEMENT_VISION.md` → product authority for scope, phases, safety, success.
 ui.health: `/clusters/:clusterId/overview` → topology + DCS + routing + backup + operation summary + guarded action entry.
 ui.ops: `/operations` + `/operations/:operationId/log` → queue/state/filter/detail/log/failure/verification.
+ui.query: `/clusters/:clusterId/query-performance` → state/coverage/filter/KPI/trend/top-query/detail/enable/disable.
 api.health: `GET /clusters/{id}/health` → `{observed_at,topology,dcs,routing,backup,operation,recoverability}`.
+api.query: `GET /clusters/{id}/query-performance` + `GET /clusters/{id}/query-performance/{fingerprintId}` → `{status,coverage,summary,series,queries|fingerprint,filters?,histogram?}`.
 api.preflight: `POST /clusters/{id}/preflights` `{type,target?,params?}` → `{id,observed,desired,checks,blockers,plan,affected_nodes,confirmation}`.
 api.run: `POST /clusters/{id}/operations` `{preflight_id,confirmation}` → `{operation_id,status}`.
 api.ops: `GET /operations` + `GET /operations/{id}` + `GET /operations/{id}/log` → durable operation/audit state.
-op.v1: `type ∈ {switchover,reload,rolling_restart,replica_reinit,backup_full,backup_diff}`.
+op.v1: `type ∈ {switchover,reload,rolling_restart,replica_reinit,backup_full,backup_diff,query_analytics_enable,query_analytics_disable}`.
 op.state: `queued → running → succeeded|failed|cancelled`.
 db: `console/db/migrations` → preserve existing data; extend operation/preflight/audit/backup-evidence persistence.
+db.query: Console DB → analytics source + fingerprint + complete bucket + retained sample + 7d retention.
 automation: API runner → existing inventory + supported Autobase playbooks/roles + Patroni/pgBackRest operations.
+automation.query: signed package + secure PGSM config + scoped read-only role + serial HA rollout.
 authority: Patroni/DCS → live topology; routing target checks → traffic state; pgBackRest → backup/WAL/lock state.
 release: stock `2.9.0` DB/config fixture → migrate → verify data + secrets metadata + zero managed-cluster mutation.
 verify: Go unit/integration + UI unit/e2e + migration fixture + operation safety contract + `git diff --check`.
@@ -48,8 +52,8 @@ V2: doc fully generic → environment names, IPs, credentials, secret values ⊥
 V3: passive import → package/config/service/credential/PostgreSQL/Patroni/DCS/routing/backup/monitoring mutation ⊥.
 V4: ∀ mutating operation → preflight + desired/current diff + explicit confirmation + cluster lock + durable audit.
 V5: leader/replica roles refreshed immediately before switchover, restart, reinit, node removal, restore.
-V6: v1 covers health/topology, DCS/routing/backup state, planned switchover, reload, rolling restart, guarded replica reinit, manual full/diff backup, single scheduler ownership, operation progress/log/failure visibility.
-V7: phase 2 owns scaling, config, updates/upgrades, emergency failover, restore/PITR; phase 3 owns database/role/extension/PgBouncer administration.
+V6: v1 covers health/topology, DCS/routing/backup state, query-performance analytics, planned switchover, reload, rolling restart, guarded replica reinit, manual full/diff backup, single scheduler ownership, operation progress/log/failure visibility.
+V7: phase 2 owns scaling, generic config, updates/upgrades, emergency failover, restore/PITR; phase 3 owns database/role/generic extension/PgBouncer administration; platform-owned PGSM lifecycle remains v1.
 V8: architecture reuses existing Console + Automation boundaries; browser-direct host access ⊥.
 V9: non-goals explicitly include SQL editor, billing, cloud-provider parity, arbitrary execution, Enterprise-code replication.
 V10: v1 acceptance → zero-mutation import + serialized ops + complete audit + preserved HA + current and restore-proven backups.
@@ -75,22 +79,35 @@ V29: phase 2 node removal/scaling/update/upgrade/emergency failover preserves re
 V30: restore/PITR targets isolated recovery workflow; running source-cluster overwrite ⊥.
 V31: phase 3 database/owner/user/role/grant/extension/PgBouncer changes reuse authorization, preflight, confirmation, locking, audit, verification contract.
 V32: automated tests cover operation lock race, stale preflight, role change, secret redaction, failure transition, HA guard, backup verification, stock `2.9.0` migration.
+V33: v1 query analytics = platform-owned `pg_stat_monitor`; SQL editor + generic extension/config administration remain excluded.
+V34: supported new Console cluster → analytics default on; import/Console upgrade → read-only detect + `rollout_required`; managed-cluster mutation ⊥ until confirmed operation.
+V35: compatibility ∈ release-tested package matrix; initial = PostgreSQL `14..18` + `pg_stat_monitor` `2.3.2`; unsigned/source build ⊥.
+V36: existing enable|disable → standard preflight/confirm/lock/audit + ≥3 healthy members.
+V37: rollout `serial=1`; replicas first + verify each → controlled switchover → former leader last; failed gate → stop.
+V38: preload merge preserves other libraries; existing `pg_stat_statements` precedes `pg_stat_monitor`.
+V39: normalized SQL + PGSM query id + application tracking on; utility/planning/comment/plan capture off; `track_io_timing` unchanged.
+V40: collector role = login + `pg_read_all_stats` + read-only + timeout + scoped HBA; superuser ⊥; credential encrypted + redacted.
+V41: collector reads every healthy PostgreSQL node + `bucket_done=true` only; self-query excluded; ingest idempotent by node boot/bucket/fingerprint.
+V42: Console DB retention = 7d; exact bucket totals + top100 total-time ∪ top100 max-latency samples; hourly indexed cleanup.
+V43: API/UI expose state, coverage/gaps, node/database/role/application filters, totals, trends, top queries, detail histogram.
+V44: literals, client IP, comments, plans, error text, credentials, raw collector SQL ⊥ persistence/log/API.
+V45: tests cover package matrix, privacy drift, serial rollout failure, switchover, duplicate ingest, retention, coverage gaps, stock `2.9.0` migration.
 
 ## §T
 
 id|status|task|cites
 T1|x|add root management vision + migration baseline; verify formatting, references, privacy|V1,V2,V11,I.doc
-T2|.|add stock `2.9.0` DB/config fixture + direct migration preservation test|V12,V13,V14,V15,V32,I.release,I.verify
-T3|.|extend Console DB operation/preflight/audit model + DB-enforced per-cluster lock|V19,V20,V21,V32,I.db,I.op.state
-T4|.|add unified health collector + `GET /clusters/{id}/health`|V16,V17,V26,I.api.health,I.authority
-T5|.|make import passive; report drift + gate management|V3,V18,V32,I.api.health,I.authority
-T6|.|add shared preflight/confirm/launch service + operation detail API + redaction|V4,V8,V19,V20,V21,V22,V28,V32,I.api.preflight,I.api.run,I.api.ops,I.automation
-T7|.|build cluster health + operation-center UI on existing routes|V16,V17,V19,V20,V26,I.ui.health,I.ui.ops,I.api.health,I.api.ops
+T2|.|add stock `2.9.0` DB/config fixture + direct migration preservation test incl analytics schema|V12,V13,V14,V15,V32,V45,I.release,I.verify
+T3|.|extend Console DB operation/preflight/audit + query source/fingerprint/bucket/sample model + DB locks/retention|V19,V20,V21,V32,V40,V41,V42,V45,I.db,I.db.query,I.op.state
+T4|.|add unified health + all-node complete-bucket collectors + health/query GET APIs|V16,V17,V26,V41,V42,V43,V44,V45,I.api.health,I.api.query,I.authority,I.db.query
+T5|.|make import passive; report health/query capability drift + gate management|V3,V18,V34,V35,V39,V40,V44,V45,I.api.health,I.api.query,I.authority
+T6|.|add shared preflight/confirm/launch + operation detail + query enable/disable + redaction|V4,V8,V19,V20,V21,V22,V28,V32,V34,V36,V40,V44,V45,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query
+T7|.|build cluster health + operation-center + query-performance UI on existing routes|V16,V17,V19,V20,V26,V34,V42,V43,V44,V45,I.ui.health,I.ui.ops,I.ui.query,I.api.health,I.api.ops,I.api.query
 T8|.|add guarded planned switchover vertical slice|V5,V21,V22,V23,V32,I.op.v1,I.automation
-T9|.|add reload + guarded rolling-restart vertical slices|V5,V21,V22,V24,V32,I.op.v1,I.automation
+T9|.|add reload + guarded rolling-restart + PGSM package/config/bootstrap/enable/disable vertical slices|V5,V21,V22,V24,V32,V35,V36,V37,V38,V39,V40,V44,V45,I.op.v1,I.automation,I.automation.query
 T10|.|add guarded replica-reinit vertical slice|V5,V21,V22,V25,V32,I.op.v1,I.automation
 T11|.|add pgBackRest health, scheduler ownership, manual full/diff backup, restore evidence|V17,V21,V22,V26,V27,V32,I.op.v1,I.authority,I.automation
-T12|.|run v1 safety/e2e + stock-upgrade gates; publish backup/upgrade/verify/rollback docs + version set|V10,V12,V13,V14,V15,V32,I.release,I.verify
+T12|.|run v1 safety/query/e2e + stock-upgrade gates; publish backup/upgrade/verify/rollback docs + version set|V10,V12,V13,V14,V15,V32,V35,V37,V39,V40,V41,V42,V43,V44,V45,I.release,I.verify
 T13|.|phase 2 add/remove nodes + supported `config_pgcluster` management|V5,V7,V29,I.automation
 T14|.|phase 2 rolling updates/upgrades + emergency-failover policy|V5,V7,V29,I.automation
 T15|.|phase 2 isolated restore + PITR workflow|V5,V7,V30,I.automation

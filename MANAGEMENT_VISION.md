@@ -30,22 +30,21 @@ Operator
    v
 Console UI --> Console API --> Console DB and operation log
                     |
-                    v
-             Autobase Automation
+                    +--> read-only query telemetry --> PostgreSQL nodes
                     |
                     v
-        PostgreSQL, Patroni, DCS, routing, backups
+             Autobase Automation --> PostgreSQL, Patroni, DCS, routing, backups
 ```
 
 Responsibilities remain separated:
 
 - **Console UI** presents observed state, desired action, preflight results, confirmation, progress, and outcome.
-- **Console API** authorizes requests, validates state, acquires a per-cluster operation lock, launches automation, and records audit events.
-- **Console DB** stores inventory, operation state, sanitized parameters, logs, and outcomes.
-- **Autobase Automation** remains the orchestration layer and reuses existing playbooks and roles.
+- **Console API** authorizes requests, validates state, collects scoped read-only telemetry, acquires a per-cluster operation lock, launches automation, and records audit events.
+- **Console DB** stores inventory, operation state, sanitized parameters, logs, outcomes, and bounded query-performance history.
+- **Autobase Automation** remains the sole mutation layer and reuses existing playbooks and roles.
 - **Patroni and the DCS** remain authoritative for PostgreSQL topology and leadership.
 
-The browser must never connect directly to database hosts or receive SSH credentials. Host access belongs to the API-controlled automation runner.
+The browser must never connect directly to database hosts or receive database or SSH credentials. Mutating host access belongs to the API-controlled automation runner. The API may connect directly to PostgreSQL with a dedicated read-only monitoring role.
 
 ## Compatibility and Migration Baseline
 
@@ -115,6 +114,19 @@ Provide one cluster view covering:
 
 Health must distinguish an available database from a recoverable database. A healthy Patroni topology must not hide stale or unverified backups.
 
+### Query performance
+
+Provide cluster query-performance analytics backed by `pg_stat_monitor`:
+
+- enable compatible new Console-created clusters by default, with an explicit advanced opt-out;
+- detect existing/imported cluster capability without mutation and expose guarded enable or disable operations;
+- collect completed buckets from every PostgreSQL node so primary and read-replica workload remain visible;
+- retain seven days in Console DB with exact bucket totals and a bounded top-query sample set;
+- show coverage gaps, total database time, calls, latency, rows, buffer use, temporary blocks, WAL, trends, and latency histograms;
+- retain normalized SQL with database, role, and application context while excluding literals, client addresses, comments, plans, and error text.
+
+`pg_stat_monitor` enablement or disablement on an existing cluster must install and restart one node at a time. Restart replicas first, verify health and lag after each node, perform a controlled Patroni switchover, then restart the former leader. The operation must stop before the next node on any failed guard and must never stop the entire cluster.
+
 ### Planned switchover
 
 Allow a planned Patroni switchover only when the leader and selected candidate are healthy, the candidate is sufficiently caught up, DCS is reachable, and no conflicting operation exists. Show expected routing impact and verify the new leader and replicas after completion.
@@ -159,7 +171,7 @@ Every operation must expose queued, running, succeeded, failed, or cancelled sta
 ### Phase 3: Database administration
 
 - create and manage databases, owners, users, roles, and grants;
-- install and configure supported extensions;
+- install and configure other supported extensions;
 - manage PgBouncer pools and connection limits;
 - expose changes through the same preflight, confirmation, locking, logging, and audit model.
 
@@ -171,7 +183,7 @@ Every operation must expose queued, running, succeeded, failed, or cancelled sta
 - arbitrary shell or unrestricted Ansible execution;
 - replacement of Autobase Automation, Patroni, pgBackRest, or the DCS;
 - reproduction of proprietary Enterprise implementation or assets;
-- database, role, extension, or PgBouncer administration before safe cluster operations are established.
+- database, role, generic extension, or PgBouncer administration before safe cluster operations are established; platform-owned `pg_stat_monitor` telemetry is the sole v1 exception.
 
 ## Success Criteria
 
@@ -184,6 +196,7 @@ V1 succeeds when:
 - planned switchover, reload, rolling restart, and replica reinitialization preserve required HA or stop before violating it;
 - manual backups finish with verified pgBackRest results and scheduling has one cluster-aware owner;
 - backup freshness is evaluated against policy and recoverability includes recorded restore evidence;
+- supported new clusters collect normalized query telemetry by default, existing clusters can roll it out without full-cluster downtime, and the Console exposes seven days of bounded primary and replica analytics;
 - routine supported operations no longer require operators to assemble direct SSH commands;
 - failed operations leave the cluster recoverable and provide a clear safe next action.
 - every release can migrate a representative unmodified Autobase Community `2.9.0` installation without resetting Console data or mutating managed clusters.
