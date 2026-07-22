@@ -41,3 +41,23 @@
     - item.role | default('') | length > 0
     - patroni_standby_cluster.host | default('') | length < 1 # do not perform on the standby cluster
   tags: postgresql_users
+
+- name: Configure query analytics role safety limits
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_query:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgresql_port }}"
+    login_user: "{{ patroni_superuser_username }}"
+    login_password: "{{ patroni_superuser_password }}"
+    login_db: "postgres"
+    query:
+      - >-
+        ALTER ROLE "{{ query_analytics_monitor_username }}"
+        SET default_transaction_read_only = on
+      - >-
+        ALTER ROLE "{{ query_analytics_monitor_username }}"
+        SET statement_timeout = '5s'
+  no_log: true
+  when: enable_pg_stat_monitor | default(false) | bool
+  tags: postgresql_users, pg_stat_monitor

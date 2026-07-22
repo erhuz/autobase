@@ -1,0 +1,59 @@
+---
+- name: Verify pg_stat_monitor configuration contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    enable_pg_stat_monitor: true
+    pg_stat_monitor_version: "2.3.2"
+    postgresql_version: "16"
+    ansible_architecture: x86_64
+    query_analytics_monitor_username: autobase_query_monitor
+    query_analytics_collector_cidrs: ["10.0.3.50/32"]
+    host_type: host
+    postgresql_password_encryption_algorithm: scram-sha-256
+    postgresql_parameters_overrides: []
+    postgresql_parameters:
+      - { option: "track_io_timing", value: "on" }
+      - { option: "shared_preload_libraries", value: "auto_explain,pg_stat_monitor,pg_stat_statements" }
+    postgresql_pg_hba:
+      - { type: "host", database: "all", user: "all", address: "10.0.0.0/8", method: "scram-sha-256" }
+  tasks:
+    - name: Exercise extension pre-checks
+      ansible.builtin.include_tasks: "../roles/pre_checks/tasks/extensions.yml"
+
+    - name: Extract configured values
+      ansible.builtin.set_fact:
+        pgsm_preload: >-
+          {{ postgresql_parameters | selectattr('option', 'equalto', 'shared_preload_libraries')
+          | map(attribute='value') | first }}
+        pgsm_settings: "{{ dict(postgresql_parameters | map(attribute='option') | zip(postgresql_parameters | map(attribute='value'))) }}"
+
+    - name: Check privacy, preload, and collector scope
+      ansible.builtin.assert:
+        that:
+          - pgsm_preload.split(',') | last == 'pg_stat_monitor'
+          - pgsm_preload.split(',').index('pg_stat_statements') < pgsm_preload.split(',').index('pg_stat_monitor')
+          - pgsm_settings['pg_stat_monitor.pgsm_normalized_query'] == 'on'
+          - pgsm_settings['pg_stat_monitor.pgsm_enable_query_plan'] == 'off'
+          - pgsm_settings['pg_stat_monitor.pgsm_extract_comments'] == 'off'
+          - pgsm_settings['track_io_timing'] == 'on'
+          - postgresql_pg_hba[0].user == query_analytics_monitor_username
+          - postgresql_pg_hba[0].address == query_analytics_collector_cidrs[0]
+          - postgresql_pg_hba[1].method == 'reject'
+          - postgresql_pg_hba[2].method == 'reject'
+          - postgresql_pg_hba[3].user == 'all'
+
+    - name: Check package contract remains binary-only
+      ansible.builtin.assert:
+        that:
+          - "'percona-pg-stat-monitor' in package_tasks"
+          - "'pg_stat_monitor_' in package_tasks"
+          - "'repo.percona.com' in repository_tasks"
+          - "'pg_stat_monitor_version' in database_object_tasks"
+          - "'git clone' not in package_tasks"
+          - "'make install' not in package_tasks"
+      vars:
+        package_tasks: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/packages/tasks/extensions.yml') }}"
+        repository_tasks: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/add_repository/tasks/extensions.yml') }}"
+        database_object_tasks: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/pre_checks/tasks/passwords.yml') }}"

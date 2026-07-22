@@ -3,6 +3,43 @@
 # Extension Auto-Setup: pre-checks and shared_preload_libraries
 
 # pre-checks
+- name: pg_stat_monitor | Check PostgreSQL version
+  ansible.builtin.assert:
+    that:
+      - postgresql_version | int >= 14
+      - postgresql_version | int <= 18
+    fail_msg: >-
+      pg_stat_monitor {{ pg_stat_monitor_version | default('2.3.2') }} supports PostgreSQL 14 through 18.
+  when: enable_pg_stat_monitor | default(false) | bool
+
+- name: pg_stat_monitor | Check collector access
+  ansible.builtin.assert:
+    that:
+      - query_analytics_monitor_username | default('') is match('^[a-z_][a-z0-9_]{0,62}$')
+      - query_analytics_collector_cidrs | default([]) | length > 0
+    fail_msg: >-
+      Query analytics requires a safe monitoring role name and at least one Console collector CIDR.
+  when: enable_pg_stat_monitor | default(false) | bool
+
+- name: pg_stat_monitor | Check privacy overrides
+  ansible.builtin.assert:
+    that:
+      - >-
+        postgresql_parameters_overrides | default([])
+        | selectattr('option', 'equalto', item.option)
+        | map(attribute='value')
+        | map('string')
+        | map('lower')
+        | list
+        | difference([item.value])
+        | length == 0
+    fail_msg: "Unsafe pg_stat_monitor override for {{ item.option }}"
+  loop:
+    - { option: "pg_stat_monitor.pgsm_normalized_query", value: "on" }
+    - { option: "pg_stat_monitor.pgsm_enable_query_plan", value: "off" }
+    - { option: "pg_stat_monitor.pgsm_extract_comments", value: "off" }
+  when: enable_pg_stat_monitor | default(false) | bool
+
 - name: TimescaleDB | Checking PostgreSQL version
   ansible.builtin.fail:
     msg:
@@ -67,6 +104,7 @@
         + (['pg_partman_bgw'] if (enable_pg_partman | default(false) | bool) else [])
         + (['pg_search'] if ((enable_paradedb | default(false) | bool) or (enable_pg_search | default(false) | bool)) else [])
         + (['pg_analytics'] if ((enable_paradedb | default(false) | bool) or (enable_pg_analytics | default(false) | bool)) else [])
+        + (['pg_stat_monitor'] if (enable_pg_stat_monitor | default(false) | bool) else [])
       }}
 
 - name: Add required extensions to 'shared_preload_libraries' (if missing)
@@ -101,3 +139,86 @@
       }}
   loop: "{{ extensions | default([]) | unique }}"
   when: extensions | default([]) | length > 0
+
+- name: pg_stat_monitor | Keep preload library last
+  ansible.builtin.set_fact:
+    postgresql_parameters: >-
+      {{ postgresql_parameters | rejectattr('option', 'equalto', 'shared_preload_libraries') | list
+      + [{'option': 'shared_preload_libraries', 'value': ordered_preload_libraries}] }}
+  vars:
+    shared_preload_libraries_item: >-
+      {{
+        postgresql_parameters
+        | selectattr('option', 'equalto', 'shared_preload_libraries')
+        | list | last | default({'value': ''})
+      }}
+    ordered_preload_libraries: >-
+      {{
+        (shared_preload_libraries_item.value.split(',')
+        | map('trim')
+        | reject('equalto', '')
+        | reject('equalto', 'pg_stat_monitor')
+        | list + ['pg_stat_monitor'])
+        | join(',')
+      }}
+  when: enable_pg_stat_monitor | default(false) | bool
+
+- name: pg_stat_monitor | Apply safe collection settings
+  ansible.builtin.set_fact:
+    postgresql_parameters: >-
+      {{ postgresql_parameters | rejectattr('option', 'in', pg_stat_monitor_parameters | map(attribute='option') | list) | list
+      + pg_stat_monitor_parameters }}
+  vars:
+    pg_stat_monitor_parameters:
+      - { option: "pg_stat_monitor.pgsm_max", value: "256" }
+      - { option: "pg_stat_monitor.pgsm_max_buckets", value: "10" }
+      - { option: "pg_stat_monitor.pgsm_bucket_time", value: "60" }
+      - { option: "pg_stat_monitor.pgsm_query_max_len", value: "2048" }
+      - { option: "pg_stat_monitor.pgsm_normalized_query", value: "on" }
+      - { option: "pg_stat_monitor.pgsm_track_application_names", value: "on" }
+      - { option: "pg_stat_monitor.pgsm_enable_pgsm_query_id", value: "on" }
+      - { option: "pg_stat_monitor.pgsm_track_utility", value: "off" }
+      - { option: "pg_stat_monitor.pgsm_track_planning", value: "off" }
+      - { option: "pg_stat_monitor.pgsm_extract_comments", value: "off" }
+      - { option: "pg_stat_monitor.pgsm_enable_query_plan", value: "off" }
+  when: enable_pg_stat_monitor | default(false) | bool
+
+- name: pg_stat_monitor | Scope collector HBA access
+  ansible.builtin.set_fact:
+    postgresql_pg_hba: "{{ query_analytics_hba + existing_hba }}"
+  vars:
+    existing_hba: >-
+      {{
+        postgresql_pg_hba
+        | rejectattr('user', 'equalto', query_analytics_monitor_username)
+        | list
+      }}
+    query_analytics_hba: >-
+      {{
+        query_analytics_collector_cidrs
+        | map('community.general.dict_kv', 'address')
+        | map('combine', {
+            'type': host_type,
+            'database': 'postgres',
+            'user': query_analytics_monitor_username,
+            'method': postgresql_password_encryption_algorithm
+          })
+        | list
+        + [
+          {
+            'type': host_type,
+            'database': 'all',
+            'user': query_analytics_monitor_username,
+            'address': '0.0.0.0/0',
+            'method': 'reject'
+          },
+          {
+            'type': host_type,
+            'database': 'all',
+            'user': query_analytics_monitor_username,
+            'address': '::/0',
+            'method': 'reject'
+          }
+        ]
+      }}
+  when: enable_pg_stat_monitor | default(false) | bool

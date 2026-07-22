@@ -9,7 +9,51 @@
     state: directory
     mode: "0755"
   when: ansible_os_family == "Debian"
-  tags: add_repo, timescaledb, timescale, citus
+  tags: add_repo, timescaledb, timescale, citus, pg_stat_monitor
+
+- block:
+    - name: pg_stat_monitor | Install Percona repository tool dependencies
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg2
+          - lsb-release
+        state: present
+
+    - name: pg_stat_monitor | Download Percona repository tool
+      ansible.builtin.get_url:
+        url: "https://repo.percona.com/apt/percona-release_latest.generic_all.deb"
+        dest: "/tmp/percona-release_latest.generic_all.deb"
+        mode: "0644"
+
+    - name: pg_stat_monitor | Install Percona repository tool
+      ansible.builtin.apt:
+        deb: "/tmp/percona-release_latest.generic_all.deb"
+        state: present
+
+    - name: pg_stat_monitor | Enable Percona PostgreSQL repository
+      ansible.builtin.command: >-
+        percona-release enable ppg-{{ postgresql_version }} release --scheme https
+      changed_when: false
+
+    - name: pg_stat_monitor | Pin repository to extension package
+      ansible.builtin.copy:
+        dest: "/etc/apt/preferences.d/autobase-pg-stat-monitor"
+        mode: "0644"
+        content: |
+          Package: *
+          Pin: origin "repo.percona.com"
+          Pin-Priority: 1
+
+          Package: percona-pg-stat-monitor*
+          Pin: origin "repo.percona.com"
+          Pin-Priority: 700
+  environment: "{{ proxy_env | default({}) }}"
+  when:
+    - enable_pg_stat_monitor | default(false) | bool
+    - ansible_os_family == "Debian"
+  tags: add_repo, pg_stat_monitor
 
 # TimescaleDB (if 'enable_timescale' is 'true')
 - block:
@@ -79,4 +123,4 @@
   retries: 3
   environment: "{{ proxy_env | default({}) }}"
   when: ansible_os_family == "Debian"
-  tags: add_repo, timescaledb, timescale, citus
+  tags: add_repo, timescaledb, timescale, citus, pg_stat_monitor

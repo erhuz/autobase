@@ -113,7 +113,7 @@ T14|.|phase 2 rolling updates/upgrades + emergency-failover policy|V5,V7,V29,I.a
 T15|.|phase 2 isolated restore + PITR workflow|V5,V7,V30,I.automation
 T16|.|phase 3 database, owner, user, role, grant management|V7,V31,I.api.preflight,I.api.run,I.automation
 T17|.|phase 3 supported extension + PgBouncer pool/limit management|V7,V31,I.api.preflight,I.api.run,I.automation
-T18|.|add PGSM package/config/default-on bootstrap + contract tests|V33,V34,V35,V38,V39,V40,V44,V45,I.automation.query,I.verify
+T18|x|add PGSM package/config/default-on bootstrap + contract tests|V33,V34,V35,V38,V39,V40,V44,V45,I.automation.query,I.verify
 T19|.|add analytics Console DB schema + migration/storage tests|V12,V13,V14,V40,V41,V42,V44,V45,I.db.query,I.release,I.verify
 T20|.|add all-node PGSM collector + query-performance APIs|V34,V39,V40,V41,V42,V43,V44,V45,I.api.query,I.db.query,I.verify
 T21|.|add query-performance UI + status/filter/trend/detail tests|V34,V42,V43,V44,V45,I.ui.query,I.api.query,I.verify
