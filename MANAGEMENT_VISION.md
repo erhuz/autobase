@@ -47,6 +47,22 @@ Responsibilities remain separated:
 
 The browser must never connect directly to database hosts or receive SSH credentials. Host access belongs to the API-controlled automation runner.
 
+## Compatibility and Migration Baseline
+
+This fork starts from Autobase Community `2.9.0`. Every future release must evolve from that baseline and retain a documented, tested upgrade path directly from an unmodified `2.9.0` installation. A release may incorporate later upstream changes, but it must not require an intermediate fork release before a `2.9.0` installation can migrate.
+
+The compatibility contract requires each release to:
+
+- apply ordered, forward Console DB migrations without resetting the persistent volume;
+- preserve or migrate cluster inventory, servers, projects, environments, settings, operation history, and encrypted secret records;
+- document required preservation of encryption keys and other external secret material;
+- migrate stored configuration and inventory formats when their schemas change;
+- avoid changing managed PostgreSQL clusters as a side effect of upgrading the Console control plane;
+- publish backup, upgrade, verification, and rollback instructions;
+- test the upgrade against a representative stock `2.9.0` Console DB and configuration fixture.
+
+Future releases should also state their UI, API, Console DB, and Automation compatibility as one tested version set. Migration support belongs to the release contract, not an optional later cleanup task.
+
 ## Safety Principles
 
 ### Passive import
@@ -170,3 +186,4 @@ V1 succeeds when:
 - backup freshness is evaluated against policy and recoverability includes recorded restore evidence;
 - routine supported operations no longer require operators to assemble direct SSH commands;
 - failed operations leave the cluster recoverable and provide a clear safe next action.
+- every release can migrate a representative unmodified Autobase Community `2.9.0` installation without resetting Console data or mutating managed clusters.
