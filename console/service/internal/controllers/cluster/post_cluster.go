@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"postgresql-cluster-console/internal/configuration"
@@ -152,30 +154,68 @@ func (h *postClusterHandler) Handle(param cluster.PostClustersParams) middleware
 		status = "ready"
 	}
 
+	postgresVersion := getIntValFromExtraVars(extraVars, PostgreSqlVersionExtraVar)
+	queryAnalyticsCompatible := postgresVersion >= 14 && postgresVersion <= 18
+	queryAnalyticsRequested := param.Body.QueryAnalyticsEnabled == nil || *param.Body.QueryAnalyticsEnabled
+	queryAnalyticsManaged := !existing && queryAnalyticsCompatible
+	queryAnalyticsDesired := queryAnalyticsManaged && queryAnalyticsRequested
+	var queryAnalyticsPassword string
+	if queryAnalyticsDesired {
+		passwordBytes := make([]byte, 24)
+		if _, err = rand.Read(passwordBytes); err != nil {
+			return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(err, controllers.BaseError))
+		}
+		queryAnalyticsPassword = hex.EncodeToString(passwordBytes)
+		extraVars["enable_pg_stat_monitor"] = true
+		extraVars["pg_stat_monitor_version"] = "2.3.2"
+		extraVars["query_analytics_monitor_username"] = h.cfg.QueryAnalytics.Username
+		extraVars["query_analytics_collector_cidrs"] = h.cfg.QueryAnalytics.CollectorCIDRs
+	}
+
 	// extraVars
 	extraVarsBytes, mErr := json.Marshal(extraVars)
 	if mErr != nil {
 		localLog.Error().Err(mErr).Msg("failed to marshal extra_vars; falling back to {}")
 		extraVarsBytes = []byte("{}")
 	}
+	deploymentExtraVars := extraVarsBytes
+	if queryAnalyticsDesired {
+		deploymentVars := make(map[string]interface{}, len(extraVars)+1)
+		for key, value := range extraVars {
+			deploymentVars[key] = value
+		}
+		deploymentVars["query_analytics_monitor_password"] = queryAnalyticsPassword
+		deploymentExtraVars, mErr = json.Marshal(deploymentVars)
+		if mErr != nil {
+			return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(mErr, controllers.BaseError))
+		}
+	}
 
 	createdCluster, err := h.db.CreateCluster(param.HTTPRequest.Context(), &storage.CreateClusterReq{
-		ProjectID:         param.Body.ProjectID,
-		EnvironmentID:     param.Body.EnvironmentID,
-		Name:              param.Body.Name,
-		Description:       param.Body.Description,
-		SecretID:          secretID,
-		ExtraVars:         extraVarsBytes,
-		Location:          getValFromExtraVars(extraVars, LocationExtraVar),
-		ServerCount:       serverCount,
-		PostgreSqlVersion: getIntValFromExtraVars(extraVars, PostgreSqlVersionExtraVar),
-		Status:            status,
-		Inventory:         inventoryJsonVal,
+		ProjectID:             param.Body.ProjectID,
+		EnvironmentID:         param.Body.EnvironmentID,
+		Name:                  param.Body.Name,
+		Description:           param.Body.Description,
+		SecretID:              secretID,
+		ExtraVars:             extraVarsBytes,
+		Location:              getValFromExtraVars(extraVars, LocationExtraVar),
+		ServerCount:           serverCount,
+		PostgreSqlVersion:     postgresVersion,
+		Status:                status,
+		Inventory:             inventoryJsonVal,
+		QueryAnalyticsManaged: &queryAnalyticsManaged,
+		QueryAnalyticsDesired: &queryAnalyticsDesired,
 	})
 	if err != nil {
 		return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(err, controllers.BaseError))
 	}
 	localLog.Info().Any("cluster", createdCluster).Msg("cluster was created")
+	if queryAnalyticsDesired {
+		if err = h.db.SetQueryAnalyticsCredential(param.HTTPRequest.Context(), createdCluster.ID, queryAnalyticsPassword, h.cfg.EncryptionKey); err != nil {
+			_ = h.db.DeleteCluster(param.HTTPRequest.Context(), createdCluster.ID)
+			return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(err, controllers.BaseError))
+		}
+	}
 
 	// Handle imported cluster: skip deployment and insert servers from inventory
 	if existing {
@@ -260,7 +300,7 @@ func (h *postClusterHandler) Handle(param cluster.PostClustersParams) middleware
 	var dockerId xdocker.InstanceID
 	dockerId, err = h.dockerManager.ManageCluster(param.HTTPRequest.Context(), &xdocker.ManageClusterConfig{
 		Envs:      param.Body.Envs,
-		ExtraVars: string(extraVarsBytes),
+		ExtraVars: string(deploymentExtraVars),
 		Mounts: []xdocker.Mount{
 			{
 				DockerPath: ansibleLogDir,

@@ -95,6 +95,10 @@ func main() {
 	clusterWatcher.Run()
 	defer clusterWatcher.Stop()
 
+	queryAnalyticsWatcher := watcher.NewQueryAnalyticsWatcher(str, cfg)
+	queryAnalyticsWatcher.Run()
+	defer queryAnalyticsWatcher.Stop()
+
 	s, err := service.NewService(cfg, Version, str, dockerManager, logAggregator, clusterWatcher)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create service")

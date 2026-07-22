@@ -204,17 +204,19 @@ type GetClustersReq struct {
 }
 
 type CreateClusterReq struct {
-	ProjectID         int64
-	EnvironmentID     int64
-	Name              string
-	Description       string
-	SecretID          *int64
-	ExtraVars         []byte
-	Location          string
-	ServerCount       int
-	PostgreSqlVersion int
-	Status            string
-	Inventory         []byte
+	ProjectID             int64
+	EnvironmentID         int64
+	Name                  string
+	Description           string
+	SecretID              *int64
+	ExtraVars             []byte
+	Location              string
+	ServerCount           int
+	PostgreSqlVersion     int
+	Status                string
+	Inventory             []byte
+	QueryAnalyticsManaged *bool
+	QueryAnalyticsDesired *bool
 }
 
 type UpdateClusterReq struct {
@@ -372,4 +374,83 @@ type QueryAnalyticsSample struct {
 	LatencyHistogram  []string
 	TopTotalTime      bool
 	TopMaxLatency     bool
+}
+
+type QueryAnalyticsFilter struct {
+	From            time.Time
+	To              time.Time
+	ServerID        *int64
+	DatabaseName    *string
+	RoleName        *string
+	ApplicationName *string
+}
+
+type QueryAnalyticsStatus struct {
+	State              string
+	Managed            bool
+	Desired            bool
+	PostgresVersion    int32
+	ExpectedNodeCount  int64
+	CollectedNodeCount int64
+}
+
+type QueryAnalyticsCoverage struct {
+	ServerID         int64
+	ServerName       string
+	ServerRole       string
+	ServerStatus     string
+	CollectionStatus string
+	ExtensionVersion *string
+	LastBucketStart  *time.Time
+	LastCollectedAt  *time.Time
+	LastErrorCode    *string
+}
+
+type QueryAnalyticsMetrics struct {
+	Calls             int64
+	TotalExecTimeMs   float64
+	MaxExecTimeMs     float64
+	MeanExecTimeMs    float64
+	Rows              int64
+	SharedBlocksHit   int64
+	SharedBlocksRead  int64
+	TempBlocksRead    int64
+	TempBlocksWritten int64
+	ReadTimeMs        float64
+	WriteTimeMs       float64
+	WALBytes          int64
+}
+
+type QueryAnalyticsSeriesPoint struct {
+	BucketStart time.Time
+	QueryAnalyticsMetrics
+}
+
+type QueryAnalyticsQuery struct {
+	FingerprintID   string
+	NormalizedQuery string
+	QueryAnalyticsMetrics
+	TopTotalTime  bool
+	TopMaxLatency bool
+}
+
+type QueryAnalyticsFilterOptions struct {
+	Databases    []string
+	Roles        []string
+	Applications []string
+}
+
+type QueryAnalyticsOverview struct {
+	Status   QueryAnalyticsStatus
+	Coverage []QueryAnalyticsCoverage
+	Summary  QueryAnalyticsMetrics
+	Series   []QueryAnalyticsSeriesPoint
+	Queries  []QueryAnalyticsQuery
+	Filters  QueryAnalyticsFilterOptions
+}
+
+type QueryAnalyticsDetail struct {
+	Fingerprint QueryAnalyticsQuery
+	Series      []QueryAnalyticsSeriesPoint
+	Histogram   []string
 }

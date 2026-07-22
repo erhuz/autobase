@@ -101,6 +101,8 @@ func NewService(
 	api.OperationGetOperationsIDLogHandler = operation.NewGetOperationLogHandler(db)
 	api.ClusterGetClustersHandler = cluster.NewGetClustersHandler(db, log.Logger)
 	api.ClusterGetClustersIDHandler = cluster.NewGetClusterHandler(db, log.Logger)
+	api.ClusterGetClustersIDQueryPerformanceHandler = cluster.NewGetQueryPerformanceHandler(db)
+	api.ClusterGetClustersIDQueryPerformanceFingerprintIDHandler = cluster.NewGetQueryPerformanceDetailHandler(db)
 	api.ClusterGetClustersDefaultNameHandler = cluster.NewGetClusterDefaultNameHandler(db, log.Logger)
 	api.ClusterPostClustersIDRemoveHandler = cluster.NewRemoveClusterHandler(db, dockerManager, logCollector, cfg, log.Logger)
 	api.ClusterDeleteServersIDHandler = cluster.NewDeleteServerHandler(db, log.Logger)

@@ -53,6 +53,16 @@ type Config struct {
 		RunEvery time.Duration `default:"1m" desc:"ClusterWatcher run interval"`
 		PoolSize int64         `default:"4" desc:"Amount of async request from ClusterWatcher"`
 	}
+	QueryAnalytics struct {
+		RunEvery       time.Duration `default:"1m" desc:"Query analytics collection interval"`
+		Retention      time.Duration `default:"168h" desc:"Query analytics retention"`
+		ConnectTimeout time.Duration `default:"5s" desc:"Managed PostgreSQL connection timeout"`
+		QueryTimeout   time.Duration `default:"10s" desc:"Managed PostgreSQL collection timeout"`
+		Port           uint16        `default:"5432" desc:"Managed PostgreSQL direct port"`
+		SSLMode        string        `default:"require" desc:"Managed PostgreSQL SSL mode"`
+		Username       string        `default:"autobase_query_monitor" desc:"Managed PostgreSQL monitoring role"`
+		CollectorCIDRs []string      `default:"samenet" desc:"PostgreSQL HBA source CIDRs for the Console collector"`
+	}
 	DbDesk struct {
 		Enabled bool          `envconfig:"dbdesk_studio_enabled" default:"true" desc:"Enable automatic dbdesk-studio registration after successful cluster deploy"`
 		URL     string        `envconfig:"dbdesk_studio_api_url" default:"http://dbdesk-studio:6789" desc:"dbdesk-studio API base URL"`

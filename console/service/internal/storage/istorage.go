@@ -70,4 +70,8 @@ type IStorage interface {
 	UpsertQueryAnalyticsSource(ctx context.Context, source *QueryAnalyticsSource) error
 	IngestQueryAnalyticsBucket(ctx context.Context, bucket *QueryAnalyticsBucket) error
 	PurgeQueryAnalyticsBefore(ctx context.Context, before time.Time) (int64, error)
+	SetQueryAnalyticsCredential(ctx context.Context, clusterID int64, password, encryptionKey string) error
+	GetQueryAnalyticsCredential(ctx context.Context, clusterID int64, encryptionKey string) (string, error)
+	GetQueryAnalyticsOverview(ctx context.Context, clusterID int64, filter *QueryAnalyticsFilter) (*QueryAnalyticsOverview, error)
+	GetQueryAnalyticsDetail(ctx context.Context, clusterID int64, fingerprintID string, filter *QueryAnalyticsFilter) (*QueryAnalyticsDetail, error)
 }

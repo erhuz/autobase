@@ -46,6 +46,23 @@ func TestQueryAnalyticsDuplicateIngestAndRetention(t *testing.T) {
 		t.Fatal("compatible new cluster did not default query analytics on")
 	}
 	defer pool.Exec(context.Background(), "delete from clusters where cluster_id = $1", clusterID) //nolint:errcheck
+	const monitorPassword = "collector-password"
+	if err = store.SetQueryAnalyticsCredential(ctx, clusterID, monitorPassword, "test-key"); err != nil {
+		t.Fatal(err)
+	}
+	decrypted, err := store.GetQueryAnalyticsCredential(ctx, clusterID, "test-key")
+	if err != nil || decrypted != monitorPassword {
+		t.Fatalf("credential round trip = %q, %v", decrypted, err)
+	}
+	var storedPlaintext bool
+	if err = pool.QueryRow(ctx, `
+		select password_ciphertext = convert_to($2, 'UTF8')
+		from query_analytics_credentials where cluster_id = $1`, clusterID, monitorPassword).Scan(&storedPlaintext); err != nil {
+		t.Fatal(err)
+	}
+	if storedPlaintext {
+		t.Fatal("credential was stored as plaintext")
+	}
 
 	err = pool.QueryRow(ctx, `
 		insert into servers (cluster_id, server_name, ip_address)
@@ -76,6 +93,30 @@ func TestQueryAnalyticsDuplicateIngestAndRetention(t *testing.T) {
 		if got != want {
 			t.Fatalf("%s count after retry = %d, want %d", table, got, want)
 		}
+	}
+	if _, err = pool.Exec(ctx, "update servers set server_status = 'running', server_role = 'primary' where server_id = $1", serverID); err != nil {
+		t.Fatal(err)
+	}
+	filter := &QueryAnalyticsFilter{From: now.Add(-time.Minute), To: now.Add(2 * time.Minute)}
+	overview, err := store.GetQueryAnalyticsOverview(ctx, clusterID, filter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overview.Status.State != "enabled" || overview.Status.CollectedNodeCount != 1 {
+		t.Fatalf("overview status = %+v", overview.Status)
+	}
+	if overview.Summary.Calls != 3 || overview.Summary.TotalExecTimeMs != 12 || len(overview.Queries) != 1 {
+		t.Fatalf("overview metrics = %+v, queries = %d", overview.Summary, len(overview.Queries))
+	}
+	if len(overview.Filters.Databases) != 1 || overview.Filters.Databases[0] != "postgres" {
+		t.Fatalf("overview filters = %+v", overview.Filters)
+	}
+	detail, err := store.GetQueryAnalyticsDetail(ctx, clusterID, "42", filter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail == nil || detail.Fingerprint.Calls != 3 || len(detail.Histogram) != 2 || detail.Histogram[1] != "2" {
+		t.Fatalf("detail = %+v", detail)
 	}
 
 	old := bucket

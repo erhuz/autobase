@@ -471,9 +471,16 @@ func (s *dbStorage) GetExtensions(ctx context.Context, req *GetExtensionsReq) ([
 }
 
 func (s *dbStorage) CreateCluster(ctx context.Context, req *CreateClusterReq) (*Cluster, error) {
-	queryAnalyticsDefault := queryAnalyticsEnabledByDefault(req.PostgreSqlVersion)
+	queryAnalyticsManaged := queryAnalyticsEnabledByDefault(req.PostgreSqlVersion)
+	queryAnalyticsDesired := queryAnalyticsManaged
+	if req.QueryAnalyticsManaged != nil {
+		queryAnalyticsManaged = *req.QueryAnalyticsManaged
+	}
+	if req.QueryAnalyticsDesired != nil {
+		queryAnalyticsDesired = *req.QueryAnalyticsDesired
+	}
 	cluster, err := QueryRowToStruct[Cluster](ctx, s.db, `insert into clusters(project_id, environment_id, cluster_name, cluster_description, secret_id, extra_vars, cluster_status, cluster_location, server_count, postgres_version, inventory, query_analytics_managed, query_analytics_desired)
-			values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12) returning *`, req.ProjectID, req.EnvironmentID, req.Name, req.Description, req.SecretID, req.ExtraVars, req.Status, req.Location, req.ServerCount, req.PostgreSqlVersion, req.Inventory, queryAnalyticsDefault)
+			values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) returning *`, req.ProjectID, req.EnvironmentID, req.Name, req.Description, req.SecretID, req.ExtraVars, req.Status, req.Location, req.ServerCount, req.PostgreSqlVersion, req.Inventory, queryAnalyticsManaged, queryAnalyticsDesired)
 	if err != nil {
 		return nil, err
 	}

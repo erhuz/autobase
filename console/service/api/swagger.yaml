@@ -393,6 +393,104 @@ paths:
           schema:
             $ref: "#/definitions/Response.Error"
 
+  /clusters/{id}/query-performance:
+    get:
+      summary: "Get cluster query performance overview"
+      tags:
+        - cluster
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+        - name: from
+          in: query
+          required: false
+          type: string
+          format: date-time
+        - name: to
+          in: query
+          required: false
+          type: string
+          format: date-time
+        - name: server_id
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: database
+          in: query
+          required: false
+          type: string
+        - name: role
+          in: query
+          required: false
+          type: string
+        - name: application
+          in: query
+          required: false
+          type: string
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: "#/definitions/Response.QueryPerformance"
+        '400':
+          description: Error
+          schema:
+            $ref: "#/definitions/Response.Error"
+
+  /clusters/{id}/query-performance/{fingerprint_id}:
+    get:
+      summary: "Get query performance detail"
+      tags:
+        - cluster
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+        - name: fingerprint_id
+          in: path
+          required: true
+          type: string
+        - name: from
+          in: query
+          required: false
+          type: string
+          format: date-time
+        - name: to
+          in: query
+          required: false
+          type: string
+          format: date-time
+        - name: server_id
+          in: query
+          required: false
+          type: integer
+          format: int64
+        - name: database
+          in: query
+          required: false
+          type: string
+        - name: role
+          in: query
+          required: false
+          type: string
+        - name: application
+          in: query
+          required: false
+          type: string
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: "#/definitions/Response.QueryPerformanceDetail"
+        '400':
+          description: Error
+          schema:
+            $ref: "#/definitions/Response.Error"
+
   /servers/{id}:
     delete:
       summary: "Delete server (from the console database)"
@@ -1152,6 +1250,10 @@ definitions:
         type: boolean
         default: false
         description: "Import an already-running cluster; skip Ansible-based deployment"
+      query_analytics_enabled:
+        type: boolean
+        default: true
+        description: "Enable query analytics for new PostgreSQL 14-18 clusters"
 
 
   Response.ClusterDefaultName:
@@ -1190,6 +1292,170 @@ definitions:
           $ref: '#/definitions/ClusterInfo'
       meta:
         $ref: '#/definitions/Meta.Pagination'
+
+  QueryPerformance.Status:
+    type: object
+    properties:
+      state:
+        type: string
+        enum: [unsupported, rollout_required, disabled, collecting, enabled, degraded]
+      managed:
+        type: boolean
+      desired:
+        type: boolean
+      postgres_version:
+        type: integer
+      expected_node_count:
+        type: integer
+        format: int64
+      collected_node_count:
+        type: integer
+        format: int64
+
+  QueryPerformance.Coverage:
+    type: object
+    properties:
+      server_id:
+        type: integer
+        format: int64
+      server_name:
+        type: string
+      server_role:
+        type: string
+      server_status:
+        type: string
+      collection_status:
+        type: string
+      extension_version:
+        type: string
+        x-nullable: true
+      last_bucket_start:
+        type: string
+        format: date-time
+        x-nullable: true
+      last_collected_at:
+        type: string
+        format: date-time
+        x-nullable: true
+      last_error_code:
+        type: string
+        x-nullable: true
+
+  QueryPerformance.Metrics:
+    type: object
+    properties:
+      calls:
+        type: integer
+        format: int64
+      total_exec_time_ms:
+        type: number
+        format: double
+      max_exec_time_ms:
+        type: number
+        format: double
+      mean_exec_time_ms:
+        type: number
+        format: double
+      rows:
+        type: integer
+        format: int64
+      shared_blocks_hit:
+        type: integer
+        format: int64
+      shared_blocks_read:
+        type: integer
+        format: int64
+      temp_blocks_read:
+        type: integer
+        format: int64
+      temp_blocks_written:
+        type: integer
+        format: int64
+      read_time_ms:
+        type: number
+        format: double
+      write_time_ms:
+        type: number
+        format: double
+      wal_bytes:
+        type: integer
+        format: int64
+
+  QueryPerformance.Point:
+    type: object
+    properties:
+      bucket_start:
+        type: string
+        format: date-time
+      metrics:
+        $ref: '#/definitions/QueryPerformance.Metrics'
+
+  QueryPerformance.Query:
+    type: object
+    properties:
+      fingerprint_id:
+        type: string
+      normalized_query:
+        type: string
+      metrics:
+        $ref: '#/definitions/QueryPerformance.Metrics'
+      top_total_time:
+        type: boolean
+      top_max_latency:
+        type: boolean
+
+  QueryPerformance.Filters:
+    type: object
+    properties:
+      databases:
+        type: array
+        items:
+          type: string
+      roles:
+        type: array
+        items:
+          type: string
+      applications:
+        type: array
+        items:
+          type: string
+
+  Response.QueryPerformance:
+    type: object
+    properties:
+      status:
+        $ref: '#/definitions/QueryPerformance.Status'
+      coverage:
+        type: array
+        items:
+          $ref: '#/definitions/QueryPerformance.Coverage'
+      summary:
+        $ref: '#/definitions/QueryPerformance.Metrics'
+      series:
+        type: array
+        items:
+          $ref: '#/definitions/QueryPerformance.Point'
+      queries:
+        type: array
+        items:
+          $ref: '#/definitions/QueryPerformance.Query'
+      filters:
+        $ref: '#/definitions/QueryPerformance.Filters'
+
+  Response.QueryPerformanceDetail:
+    type: object
+    properties:
+      fingerprint:
+        $ref: '#/definitions/QueryPerformance.Query'
+      series:
+        type: array
+        items:
+          $ref: '#/definitions/QueryPerformance.Point'
+      histogram:
+        type: array
+        items:
+          type: integer
+          format: int64
 
   ClusterInfo:
     type: object

@@ -161,3 +161,19 @@ func (s *dbStorage) PurgeQueryAnalyticsBefore(ctx context.Context, before time.T
 	}
 	return deleted, nil
 }
+
+func (s *dbStorage) SetQueryAnalyticsCredential(ctx context.Context, clusterID int64, password, encryptionKey string) error {
+	_, err := s.db.Exec(ctx, `
+		insert into query_analytics_credentials (cluster_id, password_ciphertext)
+		values ($1, extensions.pgp_sym_encrypt($2, $3, 'cipher-algo=aes256'))
+		on conflict (cluster_id) do update set
+			password_ciphertext = excluded.password_ciphertext,
+			updated_at = current_timestamp`, clusterID, password, encryptionKey)
+	return err
+}
+
+func (s *dbStorage) GetQueryAnalyticsCredential(ctx context.Context, clusterID int64, encryptionKey string) (string, error) {
+	return QueryRowToScalar[string](ctx, s.db, `
+		select extensions.pgp_sym_decrypt(password_ciphertext, $2)
+		from query_analytics_credentials where cluster_id = $1`, clusterID, encryptionKey)
+}

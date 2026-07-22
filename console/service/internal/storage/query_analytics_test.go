@@ -13,9 +13,15 @@ func validQueryAnalyticsBucket() QueryAnalyticsBucket {
 	return QueryAnalyticsBucket{
 		ClusterID: 1, ServerID: 2, NodeBootTime: start.Add(-time.Hour), BucketID: 3,
 		BucketStart: start, BucketEnd: start.Add(time.Minute), Complete: true,
+		Calls: 3, TotalExecTimeMs: 12, MaxExecTimeMs: 7, Rows: 4,
+		SharedBlocksHit: 5, SharedBlocksRead: 2, ReadTimeMs: 1.5, WALBytes: 20,
 		Samples: []QueryAnalyticsSample{{
 			ClusterID: 1, ServerID: 2, NodeBootTime: start.Add(-time.Hour), BucketID: 3,
-			FingerprintID: "42", NormalizedQuery: "select * from users where id = $1", TopTotalTime: true,
+			FingerprintID: "42", NormalizedQuery: "select * from users where id = $1",
+			DatabaseName: "postgres", RoleName: "app", ApplicationName: "api",
+			Calls: 3, TotalExecTimeMs: 12, MinExecTimeMs: 1, MaxExecTimeMs: 7, MeanExecTimeMs: 4,
+			Rows: 4, SharedBlocksHit: 5, SharedBlocksRead: 2, ReadTimeMs: 1.5, WALBytes: 20,
+			LatencyHistogram: []string{"1", "2"}, TopTotalTime: true,
 		}},
 	}
 }
@@ -49,6 +55,23 @@ func TestQueryAnalyticsDefaultRequiresCompatiblePostgres(t *testing.T) {
 		if got := queryAnalyticsEnabledByDefault(version); got != want {
 			t.Errorf("PostgreSQL %d default = %t, want %t", version, got, want)
 		}
+	}
+}
+
+func TestQueryAnalyticsStatusTracksCoverage(t *testing.T) {
+	cluster := &Cluster{PostgreVersion: 16, QueryAnalyticsManaged: true, QueryAnalyticsDesired: true}
+	coverage := []QueryAnalyticsCoverage{{ServerStatus: "running", CollectionStatus: "healthy"}, {ServerStatus: "streaming", CollectionStatus: "unreachable"}}
+	status := queryAnalyticsStatus(cluster, coverage)
+	if status.State != "degraded" || status.ExpectedNodeCount != 2 || status.CollectedNodeCount != 1 {
+		t.Fatalf("status = %+v", status)
+	}
+	cluster.QueryAnalyticsManaged = false
+	if got := queryAnalyticsStatus(cluster, coverage).State; got != "rollout_required" {
+		t.Fatalf("unmanaged state = %q", got)
+	}
+	cluster.PostgreVersion = 13
+	if got := queryAnalyticsStatus(cluster, coverage).State; got != "unsupported" {
+		t.Fatalf("unsupported state = %q", got)
 	}
 }
 

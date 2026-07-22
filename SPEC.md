@@ -117,7 +117,7 @@ T16|.|phase 3 database, owner, user, role, grant management|V7,V31,I.api.preflig
 T17|.|phase 3 supported extension + PgBouncer pool/limit management|V7,V31,I.api.preflight,I.api.run,I.automation
 T18|x|add PGSM package/config/default-on bootstrap + contract tests|V33,V34,V35,V38,V39,V40,V44,V45,I.automation.query,I.verify
 T19|x|add analytics Console DB schema + migration/storage tests|V12,V13,V14,V40,V41,V42,V44,V45,V46,V47,I.db.query,I.release,I.verify
-T20|.|add all-node PGSM collector + query-performance APIs|V34,V39,V40,V41,V42,V43,V44,V45,I.api.query,I.db.query,I.verify
+T20|x|add all-node PGSM collector + query-performance APIs|V34,V39,V40,V41,V42,V43,V44,V45,I.api.query,I.db.query,I.verify
 T21|.|add query-performance UI + status/filter/trend/detail tests|V34,V42,V43,V44,V45,I.ui.query,I.api.query,I.verify
 T22|.|add guarded PGSM enable/disable preflight + serial HA operation|V4,V5,V19,V20,V21,V22,V24,V34,V36,V37,V38,V39,V40,V44,V45,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query,I.verify
 
@@ -128,3 +128,10 @@ B1|2026-07-22|Console `go.mod` pgx version absent from `go.sum`; clean verificat
 B2|2026-07-22|checkout-safe test targeted absent generated Swagger packages|V47
 B3|2026-07-22|nil latency histogram encoded SQL `NULL` against non-null sample schema|V45
 B4|2026-07-22|histogram normalization scoped to fingerprint loop; storage build failed|V45
+B5|2026-07-22|query analytics read model assigned pointer results to value fields; storage build failed|V47
+B6|2026-07-22|pinned go-swagger v0.32.3 dependency failed under Go 1.26 token internals|V47
+B7|2026-07-22|query-performance path insertion captured cluster delete operation; Swagger path validation failed|V47
+B8|2026-07-22|current generated Swagger source imported split swag helpers absent from committed module lock|V46,V47
+B9|2026-07-22|unquoted PostgreSQL test DSN triggered zsh glob expansion before integration test|V47
+B10|2026-07-22|sandbox denied localhost socket for disposable PostgreSQL integration test|V47
+B11|2026-07-22|Docker TRACE logger emitted request/response bodies containing deployment credentials|V44
