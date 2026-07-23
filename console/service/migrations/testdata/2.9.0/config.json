@@ -1,0 +1,12 @@
+{
+  "source_version": "2.9.0",
+  "environment": {
+    "PG_CONSOLE_AUTHORIZATION_TOKEN": "fixture-only-auth-token",
+    "PG_CONSOLE_DB_HOST": "stock-console-db",
+    "PG_CONSOLE_DB_DBNAME": "postgres",
+    "PG_CONSOLE_DB_USER": "postgres",
+    "PG_CONSOLE_DB_PASSWORD": "fixture-only-db-password",
+    "PG_CONSOLE_ENCRYPTIONKEY": "fixture-only-encryption-key",
+    "PG_CONSOLE_DOCKER_IMAGE": "autobase/automation:2.8.0"
+  }
+}

@@ -14,7 +14,7 @@ build: ## Build app
 	@go build -o $(GO_BIN) $(APP)
 
 test: ## Test with the committed module lock
-	@go test -mod=readonly ./internal/configuration ./internal/storage
+	@go test -mod=readonly ./migrations ./internal/configuration ./internal/storage
 
 swagger:
 	@swagger generate server --name PgConsole --spec api/swagger.yaml --principal interface{} --exclude-main
