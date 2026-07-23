@@ -51,6 +51,7 @@ jobs:
 
       - name: Verify stock upgrade and service
         run: |
+          test -z "$(gofmt -l internal/controllers/cluster/lifecycle_operations.go internal/controllers/cluster/lifecycle_operations_test.go)"
           PG_CONSOLE_TEST_DSN="postgres://postgres:test@127.0.0.1:5432/pg_console?sslmode=disable" \
             go test -mod=readonly ./migrations
           PG_CONSOLE_TEST_DSN="postgres://postgres:test@127.0.0.1:5432/pg_console?sslmode=disable" \
@@ -80,6 +81,7 @@ jobs:
           ansible-playbook automation/tests/replica_reinit_contract.yml
           ansible-playbook automation/tests/pg_stat_monitor_contract.yml
           ansible-playbook automation/tests/backup_pgbackrest_contract.yml
+          ansible-playbook automation/tests/lifecycle_operations_contract.yml
 
   ui:
     runs-on: ubuntu-latest

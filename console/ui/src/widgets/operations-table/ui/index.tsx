@@ -43,6 +43,9 @@ const operationTypes = [
   'backup_diff',
   'query_analytics_enable',
   'query_analytics_disable',
+  'node_add',
+  'node_remove',
+  'config_update',
 ];
 const operationStatuses = ['queued', 'running', 'succeeded', 'failed', 'cancelled'];
 const openEndedDate = '9999-12-31T23:59:59.999Z';

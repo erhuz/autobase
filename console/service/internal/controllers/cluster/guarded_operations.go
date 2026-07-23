@@ -56,11 +56,15 @@ func (h *guardedOperationsHandler) HandlePreflight(param clusterapi.PostClusters
 		return clusterapi.NewPostClustersIDPreflightsBadRequest().WithPayload(controllers.MakeErrorPayload(errors.New("unsupported operation type"), controllers.BaseError))
 	}
 	target := param.Body.Target
+	var params []byte
+	if param.Body.Params != nil {
+		params = mustJSON(param.Body.Params)
+	}
 	clusterInfo, err := h.db.GetCluster(ctx, param.ID)
 	if err != nil {
 		return clusterapi.NewPostClustersIDPreflightsBadRequest().WithPayload(controllers.MakeErrorPayload(errors.New("cluster state is unavailable"), controllers.BaseError))
 	}
-	state, err := h.preflightState(ctx, clusterInfo, *param.Body.Type, target)
+	state, err := h.preflightState(ctx, clusterInfo, *param.Body.Type, target, params)
 	if err != nil {
 		return clusterapi.NewPostClustersIDPreflightsBadRequest().WithPayload(controllers.MakeErrorPayload(errors.New("preflight checks failed"), controllers.BaseError))
 	}
@@ -103,12 +107,16 @@ func (h *guardedOperationsHandler) HandleOperation(param clusterapi.PostClusters
 	if err != nil {
 		return clusterapi.NewPostClustersIDOperationsBadRequest().WithPayload(controllers.MakeErrorPayload(errors.New("preflight desired state is invalid"), controllers.BaseError))
 	}
+	params, err := operationParams(preflight.Type, preflight.Desired)
+	if err != nil {
+		return clusterapi.NewPostClustersIDOperationsBadRequest().WithPayload(controllers.MakeErrorPayload(errors.New("preflight desired state is invalid"), controllers.BaseError))
+	}
 
 	clusterInfo, err := h.db.GetCluster(ctx, param.ID)
 	if err != nil {
 		return clusterapi.NewPostClustersIDOperationsBadRequest().WithPayload(controllers.MakeErrorPayload(errors.New("cluster state is unavailable"), controllers.BaseError))
 	}
-	current, err := h.preflightState(ctx, clusterInfo, preflight.Type, target)
+	current, err := h.preflightState(ctx, clusterInfo, preflight.Type, target, params)
 	if err != nil {
 		return clusterapi.NewPostClustersIDOperationsBadRequest().WithPayload(controllers.MakeErrorPayload(errors.New("cluster state could not be rechecked"), controllers.BaseError))
 	}
@@ -169,14 +177,15 @@ func supportedOperationType(operationType string) bool {
 	switch operationType {
 	case storage.OperationTypeSwitchover, storage.OperationTypeReload, storage.OperationTypeRollingRestart, storage.OperationTypeReplicaReinit,
 		storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff,
-		storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:
+		storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable,
+		storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate:
 		return true
 	default:
 		return false
 	}
 }
 
-func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterInfo *storage.Cluster, operationType, target string) (*guardedPreflight, error) {
+func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterInfo *storage.Cluster, operationType, target string, params []byte) (*guardedPreflight, error) {
 	switch operationType {
 	case storage.OperationTypeSwitchover:
 		return h.switchoverPreflightState(ctx, clusterInfo, target)
@@ -188,6 +197,8 @@ func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterIn
 		return h.backupPreflightState(ctx, clusterInfo, operationType)
 	case storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:
 		return h.queryAnalyticsPreflightState(ctx, clusterInfo, operationType)
+	case storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate:
+		return h.lifecyclePreflightState(ctx, clusterInfo, operationType, target, params)
 	default:
 		return nil, errors.New("unsupported operation type")
 	}
@@ -211,6 +222,9 @@ func (h *guardedOperationsHandler) operationInputs(ctx context.Context, clusterI
 		state, _ := queryAnalyticsState(operationType)
 		envs, extraVars, err := h.queryAnalyticsOperationInputs(ctx, clusterInfo, state)
 		return envs, extraVars, queryAnalyticsPlaybook, err
+	case storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate:
+		envs, extraVars, err := h.lifecycleOperationInputs(ctx, clusterInfo, operationType, desired)
+		return envs, extraVars, lifecyclePlaybook, err
 	default:
 		return nil, nil, "", errors.New("unsupported operation type")
 	}

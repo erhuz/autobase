@@ -1,0 +1,246 @@
+---
+- name: vitabaks.autobase.lifecycle_pgcluster | Validate fixed lifecycle request
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Select current and requested PostgreSQL nodes
+      ansible.builtin.set_fact:
+        lifecycle_postgres_nodes: "{{ groups.get('postgres_cluster', []) }}"
+        lifecycle_new_nodes: >-
+          {{
+            groups.get('postgres_cluster', [])
+            | map('extract', hostvars)
+            | selectattr('new_node', 'defined')
+            | selectattr('new_node')
+            | map(attribute='inventory_hostname')
+            | list
+          }}
+
+    - name: Require supported fixed lifecycle inputs
+      ansible.builtin.assert:
+        that:
+          - lifecycle_operation in ['node_add', 'node_remove', 'config_update']
+          - lifecycle_postgres_nodes | length >= 3
+          - lifecycle_operation != 'node_add' or lifecycle_new_nodes == [lifecycle_target]
+          - lifecycle_operation != 'node_add' or lifecycle_target in groups.get('replica', [])
+          - lifecycle_operation != 'node_add' or lifecycle_target not in groups.get('master', [])
+          - lifecycle_operation != 'node_add' or lifecycle_target not in groups.get('etcd_cluster', [])
+          - lifecycle_operation != 'node_add' or lifecycle_target not in groups.get('consul_instances', [])
+          - lifecycle_operation != 'node_add' or lifecycle_target not in groups.get('balancers', [])
+          - lifecycle_operation != 'node_remove' or lifecycle_target in groups.get('replica', [])
+          - lifecycle_operation != 'node_remove' or lifecycle_target not in groups.get('master', [])
+          - lifecycle_operation != 'node_remove' or lifecycle_target not in groups.get('etcd_cluster', [])
+          - lifecycle_operation != 'node_remove' or lifecycle_target not in groups.get('consul_instances', [])
+          - lifecycle_operation != 'node_remove' or lifecycle_target not in groups.get('balancers', [])
+          - lifecycle_operation != 'node_remove' or lifecycle_target != pgbackrest_scheduler_host | default('')
+          - lifecycle_operation != 'config_update' or lifecycle_target | length == 0
+          - lifecycle_operation != 'config_update' or postgresql_parameters_overrides | default([]) | length > 0
+
+    - name: Build pre-mutation PostgreSQL group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: lifecycle_before
+      loop: "{{ lifecycle_postgres_nodes }}"
+      when: lifecycle_operation != 'node_add' or item != lifecycle_target
+      changed_when: false
+
+    - name: Build post-mutation PostgreSQL group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: lifecycle_after
+      loop: "{{ lifecycle_postgres_nodes }}"
+      when: lifecycle_operation != 'node_remove' or item != lifecycle_target
+      changed_when: false
+
+    - name: Select post-mutation verifier
+      ansible.builtin.add_host:
+        name: "{{ (lifecycle_postgres_nodes | reject('equalto', lifecycle_target) | list | first)
+          if lifecycle_operation == 'node_remove' else (lifecycle_postgres_nodes | first) }}"
+        groups: lifecycle_verifier
+      changed_when: false
+
+    - name: Select removal target
+      ansible.builtin.add_host:
+        name: "{{ lifecycle_target }}"
+        groups: lifecycle_remove_target
+      when: lifecycle_operation == 'node_remove'
+      changed_when: false
+
+    - name: Select backup verifier
+      ansible.builtin.add_host:
+        name: "{{ pgbackrest_scheduler_host }}"
+        groups: lifecycle_backup_verifier
+      when: lifecycle_pgbackrest_enabled | bool
+      changed_when: false
+
+- name: vitabaks.autobase.lifecycle_pgcluster | Refresh topology and failover guard
+  hosts: lifecycle_before
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Define bind_address
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.bind_address
+      when: bind_address is not defined
+
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Refresh live Patroni role
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/patroni
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: lifecycle_patroni
+      changed_when: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Refresh live Patroni health
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/health
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      changed_when: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Build current leader group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: lifecycle_leader
+      loop: "{{ groups.get('lifecycle_before', []) }}"
+      when: hostvars[item].lifecycle_patroni.json.role | default('') in ['master', 'primary', 'leader']
+      changed_when: false
+      run_once: true
+
+    - name: Build current replica group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: lifecycle_replicas
+      loop: "{{ groups.get('lifecycle_before', []) }}"
+      when: hostvars[item].lifecycle_patroni.json.role | default('') == 'replica'
+      changed_when: false
+      run_once: true
+
+    - name: Require one leader and retained failover capacity
+      ansible.builtin.assert:
+        that:
+          - groups.get('lifecycle_leader', []) | length == 1
+          - lifecycle_operation == 'node_add' or groups.get('lifecycle_replicas', []) | length >= 2
+          - lifecycle_operation != 'node_add' or groups.get('lifecycle_replicas', []) | length >= 1
+          - lifecycle_operation != 'node_remove' or lifecycle_target in groups.get('lifecycle_replicas', [])
+      run_once: true
+
+- name: vitabaks.autobase.lifecycle_pgcluster | Recheck removal target role immediately before data loss
+  hosts: lifecycle_remove_target
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Recheck target is current replica immediately before node removal
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/patroni
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: lifecycle_remove_patroni
+      changed_when: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Require removal target remains a replica
+      ansible.builtin.assert:
+        that:
+          - lifecycle_remove_patroni.json.role | default('') == 'replica'
+
+- name: vitabaks.autobase.lifecycle_pgcluster | Add one replica
+  ansible.builtin.import_playbook: add_node.yml
+  when: lifecycle_operation == 'node_add'
+
+- name: vitabaks.autobase.lifecycle_pgcluster | Remove one replica
+  ansible.builtin.import_playbook: remove_node.yml
+  when: lifecycle_operation == 'node_remove'
+
+- name: vitabaks.autobase.lifecycle_pgcluster | Apply supported PostgreSQL config
+  ansible.builtin.import_playbook: config_pgcluster.yml
+  when: lifecycle_operation == 'config_update'
+
+- name: vitabaks.autobase.lifecycle_pgcluster | Verify DCS, topology, and routing
+  hosts: lifecycle_verifier
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Define bind_address
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.bind_address
+      when: bind_address is not defined
+
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Verify post-mutation topology and primary routing
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.update
+        tasks_from: verify_topology_routing
+      vars:
+        operation_postgres_nodes: "{{ groups.get('lifecycle_after', []) }}"
+
+    - name: Verify Patroni DCS membership after lifecycle change
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - patronictl
+          - -c
+          - /etc/patroni/patroni.yml
+          - list
+          - --format
+          - json
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+      register: lifecycle_dcs_members
+      changed_when: false
+      retries: 60
+      delay: 2
+      until:
+        - lifecycle_dcs_members.rc == 0
+        - lifecycle_dcs_members.stdout | from_json | length == groups.get('lifecycle_after', []) | length
+
+- name: vitabaks.autobase.lifecycle_pgcluster | Verify pgBackRest
+  hosts: lifecycle_backup_verifier
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Verify pgBackRest repository and WAL after lifecycle change
+      become_user: "{{ pgbackrest_repo_user if inventory_hostname in groups.get('pgbackrest', []) else 'postgres' }}"
+      ansible.builtin.command:
+        argv: [pgbackrest, "--stanza={{ pgbackrest_stanza }}", check]
+      register: lifecycle_pgbackrest_check
+      changed_when: false
+
+    - name: Require successful pgBackRest verification
+      ansible.builtin.assert:
+        that:
+          - lifecycle_pgbackrest_check.rc == 0

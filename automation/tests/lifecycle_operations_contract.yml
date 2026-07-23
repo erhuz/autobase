@@ -1,0 +1,40 @@
+---
+- name: Verify guarded lifecycle operation contracts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check fixed playbooks, role guards, failover capacity, and final authority checks
+      ansible.builtin.assert:
+        that:
+          - add_import in playbook
+          - remove_import in playbook
+          - config_import in playbook
+          - fixed_operations in playbook
+          - one_new_replica in playbook
+          - multi_role_rejection in playbook
+          - failover_guard in playbook
+          - immediate_role_recheck in playbook
+          - dcs_verification in playbook
+          - topology_verification in playbook
+          - backup_verification in playbook
+          - override_input in playbook
+          - arbitrary_shell not in playbook
+          - optional_active_nodes in verification_tasks
+      vars:
+        playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/lifecycle_pgcluster.yml') }}"
+        verification_tasks: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/update/tasks/verify_topology_routing.yml') }}"
+        add_import: "ansible.builtin.import_playbook: add_node.yml"
+        remove_import: "ansible.builtin.import_playbook: remove_node.yml"
+        config_import: "ansible.builtin.import_playbook: config_pgcluster.yml"
+        fixed_operations: "lifecycle_operation in ['node_add', 'node_remove', 'config_update']"
+        one_new_replica: "lifecycle_new_nodes == [lifecycle_target]"
+        multi_role_rejection: "lifecycle_target not in groups.get('etcd_cluster', [])"
+        failover_guard: "groups.get('lifecycle_replicas', []) | length >= 2"
+        immediate_role_recheck: Recheck target is current replica immediately before node removal
+        dcs_verification: Verify Patroni DCS membership after lifecycle change
+        topology_verification: "tasks_from: verify_topology_routing"
+        backup_verification: Verify pgBackRest repository and WAL after lifecycle change
+        override_input: postgresql_parameters_overrides
+        arbitrary_shell: ansible.builtin.shell
+        optional_active_nodes: operation_postgres_nodes

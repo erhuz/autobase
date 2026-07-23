@@ -24,6 +24,9 @@ const (
 	OperationTypeBackupDiff            = "backup_diff"
 	OperationTypeQueryAnalyticsEnable  = "query_analytics_enable"
 	OperationTypeQueryAnalyticsDisable = "query_analytics_disable"
+	OperationTypeNodeAdd               = "node_add"
+	OperationTypeNodeRemove            = "node_remove"
+	OperationTypeConfigUpdate          = "config_update"
 
 	ClusterStatusFailed      = "failed"
 	ClusterStatusHealthy     = "healthy"

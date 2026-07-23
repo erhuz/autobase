@@ -140,6 +140,8 @@ func operationTarget(operationType string, desired []byte) (string, error) {
 			return "", errors.New("replica reinit target is required")
 		}
 		return state.Target, nil
+	case storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove:
+		return lifecycleDesiredTarget(desired)
 	default:
 		return "", nil
 	}

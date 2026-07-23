@@ -1084,9 +1084,51 @@ definitions:
     properties:
       type:
         type: string
-        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable]
+        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update]
       target:
         type: string
+      params:
+        $ref: '#/definitions/Request.OperationParams'
+
+  Request.OperationParams:
+    type: object
+    additionalProperties: false
+    properties:
+      postgresql_parameters:
+        type: array
+        minItems: 1
+        items:
+          $ref: '#/definitions/Request.PostgreSQLParameter'
+
+  Request.PostgreSQLParameter:
+    type: object
+    required: [option, value]
+    additionalProperties: false
+    properties:
+      option:
+        type: string
+        enum:
+          - autovacuum_analyze_scale_factor
+          - autovacuum_vacuum_scale_factor
+          - deadlock_timeout
+          - default_statistics_target
+          - effective_cache_size
+          - idle_in_transaction_session_timeout
+          - log_checkpoints
+          - log_connections
+          - log_disconnections
+          - log_lock_waits
+          - log_min_duration_statement
+          - log_statement
+          - lock_timeout
+          - maintenance_work_mem
+          - random_page_cost
+          - seq_page_cost
+          - statement_timeout
+          - work_mem
+      value:
+        type: string
+        minLength: 1
 
   Request.OperationStart:
     type: object

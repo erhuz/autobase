@@ -341,8 +341,14 @@ export type RequestOperationPreflight = {
     | 'backup_full'
     | 'backup_diff'
     | 'query_analytics_enable'
-    | 'query_analytics_disable';
+    | 'query_analytics_disable'
+    | 'node_add'
+    | 'node_remove'
+    | 'config_update';
   target?: string;
+  params?: {
+    postgresql_parameters?: Array<{ option: string; value: string }>;
+  };
 };
 export type RequestOperationStart = { preflight_id: number; confirmation: string };
 export type ResponsePreflightCheck = { name?: string; ok?: boolean };

@@ -8,7 +8,7 @@
         | default('8008') }}/health
     status_code: 200
     ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
-  loop: "{{ groups['postgres_cluster'] }}"
+  loop: "{{ operation_postgres_nodes | default(groups['postgres_cluster']) }}"
   changed_when: false
   environment:
     no_proxy: "{{ hostvars[item].patroni_bind_address | default(hostvars[item].bind_address, true) }}"
@@ -22,7 +22,7 @@
         | default('8008') }}/leader
     status_code: [200, 503]
     ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
-  loop: "{{ groups['postgres_cluster'] }}"
+  loop: "{{ operation_postgres_nodes | default(groups['postgres_cluster']) }}"
   register: operation_topology_roles
   changed_when: false
   environment:
@@ -31,7 +31,7 @@
 - name: Require exactly one healthy leader
   ansible.builtin.assert:
     that:
-      - operation_topology_roles.results | length == groups['postgres_cluster'] | length
+      - operation_topology_roles.results | length == operation_postgres_nodes | default(groups['postgres_cluster']) | length
       - operation_topology_roles.results | selectattr('status', 'equalto', 200) | list | length == 1
 
 - name: Verify every primary route reaches writable PostgreSQL
