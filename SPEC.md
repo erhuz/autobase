@@ -182,3 +182,4 @@ B52|2026-07-24|new lifecycle Go source missed canonical formatting; service gate
 B52|2026-07-23|ansible-lint 26.4 made intentional play-level become + linear run-once patterns fatal; CI failed|V45
 B53|2026-07-23|CI installed Python 3.14 but bootstrap silently selected stale 3.12 pin|V45
 B54|2026-07-24|focused lifecycle Go gate ran before Swagger generation|V47
+B55|2026-07-24|Ansible lint gate ran before required `.venv` bootstrap|V45
