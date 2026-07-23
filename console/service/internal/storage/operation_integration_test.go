@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -38,12 +39,16 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 	defer func() { _ = store.DeleteCluster(context.Background(), cluster.ID) }()
 
 	preflight, err := store.CreateOperationPreflight(ctx, &CreateOperationPreflightReq{
-		ClusterID: cluster.ID, Type: OperationTypeQueryAnalyticsDisable, Observed: []byte(`{}`), Desired: []byte(`{}`),
+		ClusterID: cluster.ID, Type: OperationTypeQueryAnalyticsDisable, Observed: []byte(`{"token":"cleartext"}`), Desired: []byte(`{}`),
 		Checks: []byte(`[]`), Blockers: []byte(`[]`), Plan: []byte(`[]`), AffectedNodes: []byte(`[]`),
 		Confirmation: "DISABLE QUERY ANALYTICS", TopologyHash: "hash", ExpiresAt: time.Now().Add(time.Minute),
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	var observed map[string]any
+	if err = json.Unmarshal(preflight.Observed, &observed); err != nil || observed["token"] != "[REDACTED]" {
+		t.Fatalf("preflight secret persisted: %s", preflight.Observed)
 	}
 	if consumed, err := store.ConsumeOperationPreflight(ctx, preflight.ID); err != nil || !consumed {
 		t.Fatalf("consume = %v, %v", consumed, err)
@@ -54,8 +59,8 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 
 	req := CreateOperationReq{
 		ProjectID: projectID, ClusterID: cluster.ID, Type: OperationTypeQueryAnalyticsDisable,
-		Actor: "fixture-operator", SanitizedParams: []byte(`{"state":"disabled"}`),
-		PreflightSnapshot: []byte(`{"id":"fixture","checks":[]}`),
+		Actor: "fixture-operator", SanitizedParams: []byte(`{"state":"disabled","password":"cleartext"}`),
+		PreflightSnapshot: []byte(`{"id":"fixture","checks":[],"token":"cleartext"}`),
 		Plan:              []byte(`["serial rollout"]`), AffectedNodes: []byte(`["postgresql-1"]`),
 	}
 
@@ -101,7 +106,7 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 		t.Fatal(err)
 	}
 	succeeded := OperationStatusSucceeded
-	verification := []byte(`{"verified":true}`)
+	verification := []byte(`{"verified":true,"stderr":"cleartext"}`)
 	next := "No action required."
 	if _, err = store.UpdateOperation(ctx, &UpdateOperationReq{
 		ID: first.ID, Status: &succeeded, FinalVerification: verification, SafeNextAction: &next,
@@ -111,20 +116,21 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 	if active, err := store.HasActiveOperation(ctx, cluster.ID); err != nil || active {
 		t.Fatalf("active after terminal = %v, %v", active, err)
 	}
-	correction := "audit correction"
+	correction := "audit correction PASSWORD=cleartext"
 	if _, err = store.UpdateOperation(ctx, &UpdateOperationReq{ID: first.ID, Logs: &correction}); err != nil {
 		t.Fatalf("append-only terminal audit correction failed: %v", err)
 	}
 	var auditComplete bool
 	if err = pool.QueryRow(ctx, `select
 		actor = 'fixture-operator'
-		and sanitized_params = '{"state":"disabled"}'
-		and preflight_snapshot = '{"id":"fixture","checks":[]}'
+		and sanitized_params = '{"state":"disabled","password":"[REDACTED]"}'
+		and preflight_snapshot = '{"id":"fixture","checks":[],"token":"[REDACTED]"}'
 		and plan = '["serial rollout"]'
 		and affected_nodes = '["postgresql-1"]'
-		and final_verification = '{"verified":true}'
+		and final_verification = '{"verified":true,"stderr":"[REDACTED]"}'
 		and safe_next_action = 'No action required.'
-		and operation_log like '%audit correction'
+		and operation_log like '%audit correction%'
+		and operation_log not like '%cleartext%'
 		and created_at is not null
 		and updated_at is not null
 		from operations where id = $1`, first.ID).Scan(&auditComplete); err != nil {

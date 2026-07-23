@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"postgresql-cluster-console/internal/controllers"
+	"postgresql-cluster-console/internal/redact"
 	"postgresql-cluster-console/internal/storage"
 	"postgresql-cluster-console/models"
 	operationapi "postgresql-cluster-console/restapi/operations/operation"
@@ -30,10 +31,16 @@ func (h *getOperationHandler) Handle(param operationapi.GetOperationsIDParams) m
 	_ = json.Unmarshal(operation.Plan, &plan)
 	_ = json.Unmarshal(operation.AffectedNodes, &affected)
 	_ = json.Unmarshal(operation.FinalVerification, &verification)
+	for i := range plan {
+		plan[i] = redact.Text(plan[i])
+	}
+	for i := range affected {
+		affected[i] = redact.Text(affected[i])
+	}
 	response := &models.ResponseOperationDetail{
 		ID: operation.ID, ClusterID: operation.ClusterID, Type: operation.Type, Status: operation.Status,
-		Actor: operation.Actor, SanitizedParams: params, PreflightSnapshot: snapshot, Plan: plan,
-		AffectedNodes: affected, FinalVerification: verification, SafeNextAction: operation.SafeNextAction,
+		Actor: operation.Actor, SanitizedParams: redact.Value(params), PreflightSnapshot: redact.Value(snapshot), Plan: plan,
+		AffectedNodes: affected, FinalVerification: redact.Value(verification), SafeNextAction: operation.SafeNextAction,
 		Started: strfmt.DateTime(operation.CreatedAt),
 	}
 	if operation.UpdatedAt != nil && storage.IsTerminalOperationStatus(operation.Status) {

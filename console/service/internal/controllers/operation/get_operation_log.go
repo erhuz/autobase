@@ -2,6 +2,7 @@ package operation
 
 import (
 	"postgresql-cluster-console/internal/controllers"
+	"postgresql-cluster-console/internal/redact"
 	"postgresql-cluster-console/internal/storage"
 	"postgresql-cluster-console/restapi/operations/operation"
 
@@ -26,7 +27,7 @@ func (h *getOperationLogHandler) Handle(param operation.GetOperationsIDLogParams
 
 	var logMessage string
 	if op.Log != nil {
-		logMessage = *op.Log
+		logMessage = redact.Text(*op.Log)
 	}
 
 	return operation.NewGetOperationsIDLogOK().WithPayload(logMessage).WithContentType("plain/text").WithXLogCompleted(func() bool {

@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"postgresql-cluster-console/internal/redact"
 	"postgresql-cluster-console/internal/storage"
 	"postgresql-cluster-console/internal/xdocker"
 	"postgresql-cluster-console/pkg/tracer"
@@ -74,6 +75,7 @@ func (lc *logCollector) storeLogsFromContainer(operationID int64, dockerCode xdo
 	ctx := context.WithValue(lc.ctx, tracer.CtxCidKey{}, cid)
 	lc.log.Trace().Msg("storeLogsFromContainer called")
 	lc.dockerManager.StoreContainerLogs(ctx, dockerCode, func(logMessage string) {
+		logMessage = redact.Text(logMessage)
 		lc.log.Trace().Str("cid", cid).Str("proc", "storeLogsFromContainer").Msg(logMessage)
 		_, err := lc.db.UpdateOperation(ctx, &storage.UpdateOperationReq{
 			ID:   operationID,
@@ -89,6 +91,6 @@ func (lc *logCollector) printLogsFromContainer(dockerCode xdocker.InstanceID, ci
 	ctx := context.WithValue(lc.ctx, tracer.CtxCidKey{}, cid)
 	lc.log.Trace().Msg("storeLogsFromContainer called")
 	lc.dockerManager.StoreContainerLogs(ctx, dockerCode, func(logMessage string) {
-		lc.log.Trace().Str("cid", cid).Msg(logMessage)
+		lc.log.Trace().Str("cid", cid).Msg(redact.Text(logMessage))
 	})
 }

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"postgresql-cluster-console/internal/redact"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -542,7 +544,8 @@ func (s *dbStorage) ReserveOperation(ctx context.Context, req *CreateOperationRe
 		values($1,$2,'',$3,$4,$5,coalesce(nullif($6,''),'api-token'),
 			coalesce($7::jsonb,'{}'),coalesce($8::jsonb,'{}'),coalesce($9::jsonb,'[]'),coalesce($10::jsonb,'[]')) returning *`,
 		req.ProjectID, req.ClusterID, req.Type, OperationStatusQueued, req.Cid,
-		req.Actor, req.SanitizedParams, req.PreflightSnapshot, req.Plan, req.AffectedNodes)
+		req.Actor, redact.JSON(req.SanitizedParams), redact.JSON(req.PreflightSnapshot),
+		redact.JSON(req.Plan), redact.JSON(req.AffectedNodes))
 	if err != nil {
 		return nil, err
 	}
@@ -717,6 +720,15 @@ func (s *dbStorage) GetInProgressOperations(ctx context.Context, from time.Time)
 }
 
 func (s *dbStorage) UpdateOperation(ctx context.Context, req *UpdateOperationReq) (*Operation, error) {
+	logs, next := req.Logs, req.SafeNextAction
+	if logs != nil {
+		value := redact.Text(*logs)
+		logs = &value
+	}
+	if next != nil {
+		value := redact.Text(*next)
+		next = &value
+	}
 	operation, err := QueryRowToStruct[Operation](ctx, s.db,
 		`update operations
 		set operation_status = coalesce($1, operation_status),
@@ -725,7 +737,7 @@ func (s *dbStorage) UpdateOperation(ctx context.Context, req *UpdateOperationReq
 		    final_verification = case when $4::jsonb is null then final_verification else $4::jsonb end,
 		    safe_next_action = coalesce($5, safe_next_action)
 		where id = $6 returning *`,
-		req.Status, req.Logs, req.DockerCode, req.FinalVerification, req.SafeNextAction, req.ID)
+		req.Status, logs, req.DockerCode, redact.JSON(req.FinalVerification), next, req.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -745,8 +757,9 @@ func (s *dbStorage) CreateOperationPreflight(ctx context.Context, req *CreateOpe
 		cluster_id, operation_type, observed, desired, checks, blockers, plan, affected_nodes,
 		confirmation, topology_hash, expires_at)
 		values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *`,
-		req.ClusterID, req.Type, req.Observed, req.Desired, req.Checks, req.Blockers,
-		req.Plan, req.AffectedNodes, req.Confirmation, req.TopologyHash, req.ExpiresAt)
+		req.ClusterID, req.Type, redact.JSON(req.Observed), redact.JSON(req.Desired),
+		redact.JSON(req.Checks), redact.JSON(req.Blockers), redact.JSON(req.Plan),
+		redact.JSON(req.AffectedNodes), req.Confirmation, req.TopologyHash, req.ExpiresAt)
 }
 
 func (s *dbStorage) GetOperationPreflight(ctx context.Context, id int64) (*OperationPreflight, error) {
