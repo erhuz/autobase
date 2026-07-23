@@ -184,3 +184,4 @@ B53|2026-07-23|CI installed Python 3.14 but bootstrap silently selected stale 3.
 B54|2026-07-24|focused lifecycle Go gate ran before Swagger generation|V47
 B55|2026-07-24|Ansible lint gate ran before required `.venv` bootstrap|V45
 B56|2026-07-24|local Playwright web server invoked unavailable `yarn` shim|V45
+B57|2026-07-24|local Playwright gate ran before Chromium bundle install|V45
