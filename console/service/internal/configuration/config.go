@@ -53,6 +53,10 @@ type Config struct {
 		RunEvery time.Duration `default:"1m" desc:"ClusterWatcher run interval"`
 		PoolSize int64         `default:"4" desc:"Amount of async request from ClusterWatcher"`
 	}
+	Backup struct {
+		RunEvery time.Duration `default:"5m" desc:"pgBackRest evidence collection interval"`
+		Timeout  time.Duration `default:"2m" desc:"pgBackRest evidence collection timeout"`
+	}
 	QueryAnalytics struct {
 		RunEvery       time.Duration `default:"1m" desc:"Query analytics collection interval"`
 		Retention      time.Duration `default:"168h" desc:"Query analytics retention"`

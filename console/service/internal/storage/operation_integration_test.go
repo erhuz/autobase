@@ -38,6 +38,21 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 	}
 	defer func() { _ = store.DeleteCluster(context.Background(), cluster.ID) }()
 
+	walContinuous := true
+	observedAt := time.Now().UTC().Truncate(time.Second)
+	if err = store.UpsertBackupEvidence(ctx, &BackupEvidence{
+		ClusterID: cluster.ID, ObservedAt: observedAt, RepositoryReachable: true,
+		LatestFull: &observedAt, Retention: []byte(`{"full":7}`), WalContinuous: &walContinuous,
+		Locks: []byte(`[]`), SchedulerOwners: []byte(`["postgresql-1"]`), FreshnessSeconds: 86400,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	backupEvidence, err := store.GetBackupEvidence(ctx, cluster.ID)
+	if err != nil || backupEvidence == nil || !backupEvidence.RepositoryReachable ||
+		backupEvidence.LatestFull == nil || string(backupEvidence.SchedulerOwners) != `["postgresql-1"]` {
+		t.Fatalf("backup evidence = %+v, %v", backupEvidence, err)
+	}
+
 	preflight, err := store.CreateOperationPreflight(ctx, &CreateOperationPreflightReq{
 		ClusterID: cluster.ID, Type: OperationTypeQueryAnalyticsDisable, Observed: []byte(`{"token":"cleartext"}`), Desired: []byte(`{}`),
 		Checks: []byte(`[]`), Blockers: []byte(`[]`), Plan: []byte(`[]`), AffectedNodes: []byte(`[]`),

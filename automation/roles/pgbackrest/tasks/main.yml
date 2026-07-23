@@ -197,6 +197,24 @@
     - not ansible_check_mode
   tags: pgbackrest, pgbackrest_ssh_keys
 
+- name: Require one valid pgbackrest scheduler owner
+  ansible.builtin.assert:
+    that:
+      - pgbackrest_scheduler_host | length > 0
+      - pgbackrest_scheduler_host in (groups.get('postgres_cluster', []) + groups.get('pgbackrest', []))
+  run_once: true
+  tags: pgbackrest_cron
+
+- name: Remove pgbackrest cron files from non-owner
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ pgbackrest_cron_jobs | map(attribute='file') | unique }}"
+  when:
+    - inventory_hostname != pgbackrest_scheduler_host
+    - inventory_hostname in (groups.get('postgres_cluster', []) + groups.get('pgbackrest', []))
+  tags: pgbackrest_cron
+
 - name: Add pgbackrest cron jobs on database server
   ansible.builtin.include_role:
     name: vitabaks.autobase.cron
@@ -205,6 +223,7 @@
   when:
     - "'postgres_cluster' in group_names"
     - pgbackrest_repo_host | default('') | length < 1
+    - inventory_hostname == pgbackrest_scheduler_host
   tags: pgbackrest_cron
 
 # Dedicated pgbackrest server (if "repo_host" is set)
@@ -216,4 +235,5 @@
   when:
     - "'pgbackrest' in group_names"
     - pgbackrest_repo_host | default('') | length > 0
+    - inventory_hostname == pgbackrest_scheduler_host
   tags: pgbackrest_cron

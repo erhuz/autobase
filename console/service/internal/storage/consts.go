@@ -20,6 +20,8 @@ const (
 	OperationTypeReload                = "reload"
 	OperationTypeRollingRestart        = "rolling_restart"
 	OperationTypeReplicaReinit         = "replica_reinit"
+	OperationTypeBackupFull            = "backup_full"
+	OperationTypeBackupDiff            = "backup_diff"
 	OperationTypeQueryAnalyticsEnable  = "query_analytics_enable"
 	OperationTypeQueryAnalyticsDisable = "query_analytics_disable"
 

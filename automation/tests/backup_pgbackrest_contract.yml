@@ -1,0 +1,37 @@
+---
+- name: Verify pgBackRest ownership, observation, and backup contracts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check fixed commands, duplicate-owner guard, and final evidence
+      ansible.builtin.assert:
+        that:
+          - scheduler_owner in defaults
+          - direct_full in defaults
+          - direct_diff in defaults
+          - remove_non_owner in role_tasks
+          - owner_gate in role_tasks
+          - operation_types in playbook
+          - duplicate_guard in playbook
+          - lock_guard in playbook
+          - fixed_backup_argv in playbook
+          - final_check in playbook
+          - evidence_marker in playbook
+          - arbitrary_shell not in playbook
+      vars:
+        defaults: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/common/defaults/main.yml') }}"
+        role_tasks: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/pgbackrest/tasks/main.yml') }}"
+        playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/backup_pgbackrest.yml') }}"
+        scheduler_owner: pgbackrest_scheduler_host
+        direct_full: "pgbackrest --stanza={{ '{{' }} pgbackrest_stanza {{ '}}' }} --type=full backup"
+        direct_diff: "pgbackrest --stanza={{ '{{' }} pgbackrest_stanza {{ '}}' }} --type=diff backup"
+        remove_non_owner: Remove pgbackrest cron files from non-owner
+        owner_gate: inventory_hostname == pgbackrest_scheduler_host
+        operation_types: "['observe', 'full', 'diff']"
+        duplicate_guard: "pgbackrest_scheduler_owners == [pgbackrest_scheduler_host]"
+        lock_guard: pgbackrest_lock_files | length == 0
+        fixed_backup_argv: "--type={{ '{{' }} backup_operation_type {{ '}}' }}"
+        final_check: Verify repository and WAL after backup
+        evidence_marker: AUTOBASE_BACKUP_EVIDENCE=
+        arbitrary_shell: ansible.builtin.shell

@@ -7,4 +7,5 @@ const (
 
 	LogFieldSystemInfo     = "System info"
 	LogFieldConnectionInfo = "vitabaks.autobase.deploy_finish : Connection info"
+	LogFieldBackupEvidence = "Emit sanitized pgBackRest evidence"
 )

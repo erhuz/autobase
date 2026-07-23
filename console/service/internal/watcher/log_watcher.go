@@ -142,6 +142,7 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 	}
 
 	var status string
+	var backupEvidence *storage.BackupEvidence
 	for _, logEntity := range logs {
 		switch logEntity.Task {
 		case LogFieldSystemInfo:
@@ -174,6 +175,11 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 
 				continue
 			}
+		case LogFieldBackupEvidence:
+			backupEvidence, err = storage.DecodeBackupEvidence(fmt.Sprint(logEntity.Msg), op.ClusterID)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to decode backup evidence")
+			}
 		}
 		if logEntity.Summary != nil {
 			status = logEntity.Status
@@ -189,7 +195,23 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 	} else if status != storage.OperationStatusFailed {
 		status = storage.OperationStatusFailed
 	}
-	verification, _ := json.Marshal(map[string]any{"automation_summary": true, "verified": status == storage.OperationStatusSucceeded})
+	if isBackupOperation(op.Type) {
+		if backupEvidence == nil {
+			status = storage.OperationStatusFailed
+		} else if err = lw.db.UpsertBackupEvidence(ctx, backupEvidence); err != nil {
+			log.Error().Err(err).Msg("failed to store backup evidence")
+			status = storage.OperationStatusFailed
+		}
+	}
+	verificationValues := map[string]any{"automation_summary": true, "verified": status == storage.OperationStatusSucceeded}
+	if backupEvidence != nil {
+		verificationValues["repository_reachable"] = backupEvidence.RepositoryReachable
+		verificationValues["latest_full"] = backupEvidence.LatestFull
+		verificationValues["latest_differential"] = backupEvidence.LatestDifferential
+		verificationValues["wal_continuous"] = backupEvidence.WalContinuous
+		verificationValues["scheduler_owners"] = json.RawMessage(backupEvidence.SchedulerOwners)
+	}
+	verification, _ := json.Marshal(verificationValues)
 	var next *string
 	if status == storage.OperationStatusFailed {
 		value := "Review the operation log, restore node health if needed, then run a fresh preflight."
@@ -211,6 +233,9 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 				log.Error().Err(err).Msg("failed to store query analytics desired state")
 			}
 		}
+		return
+	}
+	if isBackupOperation(op.Type) {
 		return
 	}
 
@@ -247,7 +272,7 @@ func (lw *logWatcher) markClusterStatusFailed(ctx context.Context, op *storage.O
 		log.Error().Err(err).Msg("failed to update operation status in db")
 	}
 
-	if isQueryAnalyticsOperation(op.Type) {
+	if isQueryAnalyticsOperation(op.Type) || isBackupOperation(op.Type) {
 		return
 	}
 	status = storage.ClusterStatusFailed
@@ -261,4 +286,8 @@ func (lw *logWatcher) markClusterStatusFailed(ctx context.Context, op *storage.O
 
 func isQueryAnalyticsOperation(operationType string) bool {
 	return operationType == storage.OperationTypeQueryAnalyticsEnable || operationType == storage.OperationTypeQueryAnalyticsDisable
+}
+
+func isBackupOperation(operationType string) bool {
+	return operationType == storage.OperationTypeBackupFull || operationType == storage.OperationTypeBackupDiff
 }

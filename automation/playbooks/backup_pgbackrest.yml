@@ -1,0 +1,180 @@
+---
+- name: pgBackRest backup | Discover scheduler ownership
+  hosts: postgres_cluster:pgbackrest
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Validate fixed backup inputs
+      ansible.builtin.assert:
+        that:
+          - backup_operation_type | default('observe') in ['observe', 'full', 'diff']
+          - pgbackrest_scheduler_host in (groups.get('postgres_cluster', []) + groups.get('pgbackrest', []))
+          - pgbackrest_freshness_seconds | int > 0
+          - pgbackrest_restore_tested_at is none or pgbackrest_restore_tested_at is match('^[0-9]{4}-[0-9]{2}-[0-9]{2}T')
+      run_once: true
+
+    - name: Inspect pgBackRest scheduler files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ pgbackrest_cron_jobs | map(attribute='file') | unique }}"
+      register: pgbackrest_scheduler_files
+      changed_when: false
+
+    - name: Initialize scheduler owner evidence
+      ansible.builtin.set_fact:
+        pgbackrest_scheduler_owners: []
+      delegate_to: localhost
+      delegate_facts: true
+      run_once: true
+
+    - name: Collect scheduler owner evidence
+      ansible.builtin.set_fact:
+        pgbackrest_scheduler_owners: "{{ hostvars['localhost'].pgbackrest_scheduler_owners + [item] }}"
+      loop: "{{ groups.get('postgres_cluster', []) + groups.get('pgbackrest', []) }}"
+      when: >-
+        hostvars[item].pgbackrest_scheduler_files.results | default([])
+        | selectattr('stat.exists') | list | length > 0
+      delegate_to: localhost
+      delegate_facts: true
+      run_once: true
+
+    - name: Select configured backup initiator
+      ansible.builtin.add_host:
+        name: "{{ pgbackrest_scheduler_host }}"
+        groups: pgbackrest_backup_scheduler
+      changed_when: false
+      run_once: true
+
+- name: pgBackRest backup | Observe, run, and verify
+  hosts: pgbackrest_backup_scheduler
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Read pgBackRest repository information
+      become_user: "{{ pgbackrest_repo_user if inventory_hostname in groups.get('pgbackrest', []) else 'postgres' }}"
+      ansible.builtin.command:
+        argv: [pgbackrest, "--stanza={{ pgbackrest_stanza }}", --output=json, info]
+      register: pgbackrest_info
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect pgBackRest locks
+      ansible.builtin.find:
+        paths: "{{ pgbackrest_lock_path }}"
+        patterns: "*.lock"
+        file_type: file
+      register: pgbackrest_locks
+      changed_when: false
+      failed_when: false
+
+    - name: Parse repository information before backup
+      ansible.builtin.set_fact:
+        pgbackrest_stanza_info: >-
+          {{ (pgbackrest_info.stdout | from_json | first)
+             if pgbackrest_info.rc == 0 and pgbackrest_info.stdout | length > 0 else {} }}
+        pgbackrest_lock_files: >-
+          {{ pgbackrest_locks.files | default([]) | map(attribute='path') | list }}
+
+    - name: Require one scheduler and idle reachable repository before mutation
+      ansible.builtin.assert:
+        that:
+          - hostvars['localhost'].pgbackrest_scheduler_owners == [pgbackrest_scheduler_host]
+          - pgbackrest_info.rc == 0
+          - pgbackrest_lock_files | length == 0
+      when: backup_operation_type | default('observe') in ['full', 'diff']
+
+    - name: Run guarded pgBackRest backup
+      become_user: "{{ pgbackrest_repo_user if inventory_hostname in groups.get('pgbackrest', []) else 'postgres' }}"
+      ansible.builtin.command:
+        argv:
+          - pgbackrest
+          - "--stanza={{ pgbackrest_stanza }}"
+          - "--type={{ backup_operation_type }}"
+          - backup
+      register: pgbackrest_backup
+      changed_when: true
+      failed_when: false
+      when: backup_operation_type | default('observe') in ['full', 'diff']
+
+    - name: Verify repository and WAL after backup
+      become_user: "{{ pgbackrest_repo_user if inventory_hostname in groups.get('pgbackrest', []) else 'postgres' }}"
+      ansible.builtin.command:
+        argv: [pgbackrest, "--stanza={{ pgbackrest_stanza }}", check]
+      register: pgbackrest_check
+      changed_when: false
+      failed_when: false
+      when: backup_operation_type | default('observe') in ['full', 'diff']
+
+    - name: Refresh pgBackRest repository information
+      become_user: "{{ pgbackrest_repo_user if inventory_hostname in groups.get('pgbackrest', []) else 'postgres' }}"
+      ansible.builtin.command:
+        argv: [pgbackrest, "--stanza={{ pgbackrest_stanza }}", --output=json, info]
+      register: pgbackrest_final_info
+      changed_when: false
+      failed_when: false
+
+    - name: Parse final backup inventory
+      ansible.builtin.set_fact:
+        pgbackrest_final_stanza: >-
+          {{ (pgbackrest_final_info.stdout | from_json | first)
+             if pgbackrest_final_info.rc == 0 and pgbackrest_final_info.stdout | length > 0 else {} }}
+
+    - name: Collect final backup timestamps
+      ansible.builtin.set_fact:
+        pgbackrest_full_epochs: >-
+          {{ pgbackrest_final_stanza.backup | default([])
+             | selectattr('type', 'equalto', 'full') | map(attribute='timestamp.stop') | list }}
+        pgbackrest_diff_epochs: >-
+          {{ pgbackrest_final_stanza.backup | default([])
+             | selectattr('type', 'equalto', 'diff') | map(attribute='timestamp.stop') | list }}
+
+    - name: Build sanitized pgBackRest evidence
+      ansible.builtin.set_fact:
+        pgbackrest_evidence:
+          observed_at: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+          repository_reachable: "{{ pgbackrest_final_info.rc == 0 }}"
+          latest_full: >-
+            {{ ('%Y-%m-%dT%H:%M:%SZ' | strftime(pgbackrest_full_epochs | max, utc=true))
+               if pgbackrest_full_epochs | length > 0 else none }}
+          latest_differential: >-
+            {{ ('%Y-%m-%dT%H:%M:%SZ' | strftime(pgbackrest_diff_epochs | max, utc=true))
+               if pgbackrest_diff_epochs | length > 0 else none }}
+          retention:
+            full: "{{ pgbackrest_retention_full | default('30') }}"
+            full_type: "{{ pgbackrest_retention_full_type | default('time') }}"
+            repository_type: "{{ pgbackrest_repo_type }}"
+          wal_continuous: >-
+            {{ pgbackrest_final_info.rc == 0
+               and pgbackrest_final_stanza.status.code | default(-1) | int == 0
+               and pgbackrest_final_stanza.archive | default([]) | length > 0 }}
+          locks: "{{ pgbackrest_lock_files }}"
+          scheduler_owners: "{{ hostvars['localhost'].pgbackrest_scheduler_owners }}"
+          freshness_seconds: "{{ pgbackrest_freshness_seconds | int }}"
+          restore_tested_at: "{{ pgbackrest_restore_tested_at | default(none, true) }}"
+
+    - name: Emit sanitized pgBackRest evidence
+      ansible.builtin.debug:
+        msg: "AUTOBASE_BACKUP_EVIDENCE={{ pgbackrest_evidence | to_json | b64encode }}"
+
+    - name: Require successful backup and final pgBackRest verification
+      ansible.builtin.assert:
+        that:
+          - pgbackrest_backup.rc == 0
+          - pgbackrest_check.rc == 0
+          - pgbackrest_final_info.rc == 0
+          - >-
+            (backup_operation_type == 'full' and pgbackrest_full_epochs | length > 0)
+            or (backup_operation_type == 'diff' and pgbackrest_diff_epochs | length > 0)
+      when: backup_operation_type | default('observe') in ['full', 'diff']

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"postgresql-cluster-console/internal/configuration"
+	"postgresql-cluster-console/internal/controllers/cluster"
 	"postgresql-cluster-console/internal/db"
 	"postgresql-cluster-console/internal/service"
 	"postgresql-cluster-console/internal/storage"
@@ -94,6 +95,10 @@ func main() {
 	clusterWatcher := watcher.NewServerWatcher(str, patroni.NewClient(log.Logger), cfg)
 	clusterWatcher.Run()
 	defer clusterWatcher.Stop()
+
+	backupWatcher := cluster.NewBackupWatcher(str, dockerManager, cfg)
+	backupWatcher.Run()
+	defer backupWatcher.Stop()
 
 	queryAnalyticsWatcher := watcher.NewQueryAnalyticsWatcher(str, cfg)
 	queryAnalyticsWatcher.Run()

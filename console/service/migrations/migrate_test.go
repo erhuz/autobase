@@ -174,12 +174,26 @@ func TestStock290Upgrade(t *testing.T) {
 		}
 	})
 
+	t.Run("adds empty backup evidence store", func(t *testing.T) {
+		var exists bool
+		var rows int
+		if err := pool.QueryRow(ctx, "select to_regclass('public.cluster_backup_evidence') is not null").Scan(&exists); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, "select count(*) from public.cluster_backup_evidence").Scan(&rows); err != nil {
+			t.Fatal(err)
+		}
+		if !exists || rows != 0 {
+			t.Fatalf("backup evidence relation exists=%t rows=%d", exists, rows)
+		}
+	})
+
 	t.Run("reaches current migration", func(t *testing.T) {
 		version, err := goose.GetDBVersionContext(ctx, db)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if version != 20260722213000 {
+		if version != 20260723120000 {
 			t.Fatalf("migration version = %d", version)
 		}
 	})

@@ -1084,7 +1084,7 @@ definitions:
     properties:
       type:
         type: string
-        enum: [switchover, reload, rolling_restart, replica_reinit, query_analytics_enable, query_analytics_disable]
+        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable]
       target:
         type: string
 

@@ -38,7 +38,7 @@ func TestClusterHealthIncludesTopologyRoutingAndOperations(t *testing.T) {
 		{ID: 3, Type: "rolling_restart", Status: storage.OperationStatusRunning, CreatedAt: now.Add(-time.Minute), UpdatedAt: &now},
 	}
 
-	health := clusterHealthModel(cluster, servers, operations, now)
+	health := clusterHealthModel(cluster, servers, operations, nil, now)
 	if health.Topology.Leader.Name != "postgresql-1" || len(health.Topology.Replicas) != 1 || len(health.Topology.Members) != 2 {
 		t.Fatalf("topology = %+v", health.Topology)
 	}
@@ -69,12 +69,40 @@ func TestClusterHealthIncludesTopologyRoutingAndOperations(t *testing.T) {
 }
 
 func TestClusterHealthDegradesWithoutBackupEvidence(t *testing.T) {
-	health := clusterHealthModel(&storage.Cluster{}, nil, nil, time.Now().UTC())
+	health := clusterHealthModel(&storage.Cluster{}, nil, nil, nil, time.Now().UTC())
 	if health.Backup.State != "not_observed" || health.Recoverability.State != "degraded" {
 		t.Fatalf("backup=%+v recoverability=%+v", health.Backup, health.Recoverability)
 	}
 	if strings.Join(health.Recoverability.Reasons, ",") != "backup_not_observed,wal_continuity_not_observed,restore_evidence_missing" {
 		t.Fatalf("reasons = %v", health.Recoverability.Reasons)
+	}
+}
+
+func TestClusterHealthRequiresRecoverableBackupEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	latestFull, latestDiff, restored := now.Add(-2*time.Hour), now.Add(-time.Hour), now.Add(-24*time.Hour)
+	walContinuous := true
+	evidence := &storage.BackupEvidence{
+		ObservedAt: now, RepositoryReachable: true,
+		LatestFull: &latestFull, LatestDifferential: &latestDiff,
+		Retention: []byte(`{"full":7,"differential":6}`), WalContinuous: &walContinuous,
+		Locks: []byte(`[]`), SchedulerOwners: []byte(`["postgresql-1"]`),
+		FreshnessSeconds: 86400, RestoreTestedAt: &restored,
+	}
+	health := clusterHealthModel(&storage.Cluster{}, nil, nil, evidence, now)
+	if health.Backup.State != "healthy" || health.Recoverability.State != "healthy" ||
+		health.Backup.SchedulerOwner == nil || *health.Backup.SchedulerOwner != "postgresql-1" ||
+		health.Backup.Fresh == nil || !*health.Backup.Fresh {
+		t.Fatalf("backup=%+v recoverability=%+v", health.Backup, health.Recoverability)
+	}
+
+	evidence.SchedulerOwners = []byte(`["postgresql-1","postgresql-2"]`)
+	evidence.Locks = []byte(`["backup.lock"]`)
+	health = clusterHealthModel(&storage.Cluster{}, nil, nil, evidence, now)
+	if health.Backup.State != "degraded" ||
+		!strings.Contains(strings.Join(health.Recoverability.Reasons, ","), "duplicate_scheduler_owners") ||
+		!strings.Contains(strings.Join(health.Recoverability.Reasons, ","), "backup_lock_active") {
+		t.Fatalf("backup=%+v recoverability=%+v", health.Backup, health.Recoverability)
 	}
 }
 
@@ -91,7 +119,7 @@ func TestClusterHealthOmitsStoredSecrets(t *testing.T) {
 			"superuser": "postgres", "password": "connection-secret",
 		},
 	}
-	payload, err := json.Marshal(clusterHealthModel(cluster, nil, nil, time.Now().UTC()))
+	payload, err := json.Marshal(clusterHealthModel(cluster, nil, nil, nil, time.Now().UTC()))
 	if err != nil {
 		t.Fatal(err)
 	}

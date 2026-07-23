@@ -804,6 +804,13 @@ pgbackrest_repo_type: "posix" # or "s3", "gcs", "azure"
 pgbackrest_repo_host: "" # dedicated repository host (optional)
 pgbackrest_repo_user: "postgres" # if "repo_host" is set (optional)
 pgbackrest_conf_file: "/etc/pgbackrest/pgbackrest.conf"
+pgbackrest_scheduler_host: >-
+  {{ (groups.get('pgbackrest', []) | first)
+     if pgbackrest_repo_host | default('') | length > 0
+     else (groups.get('postgres_cluster', []) | first) }}
+pgbackrest_freshness_seconds: 86400
+pgbackrest_restore_tested_at: null
+pgbackrest_lock_path: "/tmp/pgbackrest"
 # config https://pgbackrest.org/configuration.html
 pgbackrest_conf:
   global: # [global] section
@@ -865,21 +872,9 @@ pgbackrest_patroni_cluster_bootstrap_recovery_conf:
   - recovery_target_timeline: latest
 pgbackrest_patroni_cluster_clean_bootstrap: false  # false: use delta restore for PITR into existing data dir; true: clean data directory before restore.
 
-# By default, the cron jobs is created on the database server.
-# If 'repo_host' is defined, the cron jobs will be created on the pgbackrest server.
-#
-# On database servers, the pg_is_in_recovery() guard prevents replicas from triggering backups.
-# On a dedicated backup server (repo_host), the guard is omitted because there is no local
-# PostgreSQL instance — psql would fail silently and backups would never run.
-pgbackrest_full_backup_command: >-
-  {{ 'pgbackrest --stanza=' ~ pgbackrest_stanza ~ ' --type=full backup'
-     if pgbackrest_repo_host | default('') | length > 0
-     else "if [ $(psql -tAXc 'select pg_is_in_recovery()') = 'f' ]; then pgbackrest --stanza=" ~ pgbackrest_stanza ~ " --type=full backup; fi" }}
-
-pgbackrest_diff_backup_command: >-
-  {{ 'pgbackrest --stanza=' ~ pgbackrest_stanza ~ ' --type=diff backup'
-     if pgbackrest_repo_host | default('') | length > 0
-     else "if [ $(psql -tAXc 'select pg_is_in_recovery()') = 'f' ]; then pgbackrest --stanza=" ~ pgbackrest_stanza ~ " --type=diff backup; fi" }}
+# Exactly one configured host owns scheduled and manual backup initiation.
+pgbackrest_full_backup_command: "pgbackrest --stanza={{ pgbackrest_stanza }} --type=full backup"
+pgbackrest_diff_backup_command: "pgbackrest --stanza={{ pgbackrest_stanza }} --type=diff backup"
 
 pgbackrest_cron_jobs:
   - name: "pgBackRest: Full Backup"

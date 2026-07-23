@@ -65,6 +65,10 @@ type IStorage interface {
 	GetOperationPreflight(ctx context.Context, id int64) (*OperationPreflight, error)
 	ConsumeOperationPreflight(ctx context.Context, id int64) (bool, error)
 
+	// backup evidence
+	UpsertBackupEvidence(ctx context.Context, evidence *BackupEvidence) error
+	GetBackupEvidence(ctx context.Context, clusterID int64) (*BackupEvidence, error)
+
 	// server
 	CreateServer(ctx context.Context, req *CreateServerReq) (*Server, error)
 	GetServer(ctx context.Context, id int64) (*Server, error)

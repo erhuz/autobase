@@ -37,32 +37,125 @@ func (h *getHealthHandler) Handle(param clusterapi.GetClustersIDHealthParams) mi
 	if err != nil {
 		return clusterapi.NewGetClustersIDHealthBadRequest().WithPayload(controllers.MakeErrorPayload(err, controllers.BaseError))
 	}
-	return clusterapi.NewGetClustersIDHealthOK().WithPayload(clusterHealthModel(cluster, servers, operations, time.Now().UTC()))
+	backup, err := h.db.GetBackupEvidence(ctx, param.ID)
+	if err != nil {
+		return clusterapi.NewGetClustersIDHealthBadRequest().WithPayload(controllers.MakeErrorPayload(err, controllers.BaseError))
+	}
+	return clusterapi.NewGetClustersIDHealthOK().WithPayload(clusterHealthModel(cluster, servers, operations, backup, time.Now().UTC()))
 }
 
-func clusterHealthModel(cluster *storage.Cluster, servers []storage.Server, operations []storage.ClusterHealthOperation, now time.Time) *models.ResponseClusterHealth {
+func clusterHealthModel(cluster *storage.Cluster, servers []storage.Server, operations []storage.ClusterHealthOperation, backupEvidence *storage.BackupEvidence, now time.Time) *models.ResponseClusterHealth {
 	observedAt := strfmt.DateTime(now)
 	dcs := healthDCS(cluster.ExtraVars, cluster.Inventory)
 	routing := healthRouting(cluster.ConnectionInfo)
+	backup, recoverability := healthBackup(backupEvidence, now)
 
-	// ponytail: live DCS/routing/backup evidence belongs to T5/T11; unknown beats inferred health.
+	// ponytail: live DCS/routing evidence belongs to T5; unknown beats inferred health.
 	return &models.ResponseClusterHealth{
-		ObservedAt: &observedAt,
-		Topology:   healthTopology(cluster, servers),
-		Dcs:        dcs,
-		Routing:    routing,
-		Backup:     &models.HealthBackup{State: "not_observed", Locks: []string{}},
-		Operation:  healthOperationSummary(operations),
-		Recoverability: &models.HealthRecoverability{
-			State: models.HealthRecoverabilityStateDegraded,
-			Reasons: []string{
-				"backup_not_observed",
-				"wal_continuity_not_observed",
-				"restore_evidence_missing",
-			},
-		},
+		ObservedAt:     &observedAt,
+		Topology:       healthTopology(cluster, servers),
+		Dcs:            dcs,
+		Routing:        routing,
+		Backup:         backup,
+		Operation:      healthOperationSummary(operations),
+		Recoverability: recoverability,
 	}
 }
+
+func healthBackup(evidence *storage.BackupEvidence, now time.Time) (*models.HealthBackup, *models.HealthRecoverability) {
+	if evidence == nil {
+		return &models.HealthBackup{State: "not_observed", Locks: []string{}, Retention: map[string]any{}},
+			&models.HealthRecoverability{
+				State: models.HealthRecoverabilityStateDegraded,
+				Reasons: []string{
+					"backup_not_observed",
+					"wal_continuity_not_observed",
+					"restore_evidence_missing",
+				},
+			}
+	}
+
+	var retention map[string]any
+	var locks, owners []string
+	_ = json.Unmarshal(evidence.Retention, &retention)
+	_ = json.Unmarshal(evidence.Locks, &locks)
+	_ = json.Unmarshal(evidence.SchedulerOwners, &owners)
+	if retention == nil {
+		retention = map[string]any{}
+	}
+	if locks == nil {
+		locks = []string{}
+	}
+	sort.Strings(locks)
+	sort.Strings(owners)
+
+	latest := evidence.LatestFull
+	if evidence.LatestDifferential != nil && (latest == nil || evidence.LatestDifferential.After(*latest)) {
+		latest = evidence.LatestDifferential
+	}
+	fresh := false
+	if latest != nil && evidence.FreshnessSeconds > 0 {
+		age := now.Sub(*latest)
+		fresh = age >= 0 && age <= time.Duration(evidence.FreshnessSeconds)*time.Second
+	}
+	reasons := make([]string, 0, 8)
+	if !evidence.RepositoryReachable {
+		reasons = append(reasons, "backup_repository_unreachable")
+	}
+	if evidence.LatestFull == nil {
+		reasons = append(reasons, "full_backup_missing")
+	} else if !fresh {
+		reasons = append(reasons, "backup_stale")
+	}
+	if len(retention) == 0 {
+		reasons = append(reasons, "retention_not_observed")
+	}
+	if evidence.WalContinuous == nil {
+		reasons = append(reasons, "wal_continuity_not_observed")
+	} else if !*evidence.WalContinuous {
+		reasons = append(reasons, "wal_gap")
+	}
+	if len(locks) != 0 {
+		reasons = append(reasons, "backup_lock_active")
+	}
+	if len(owners) == 0 {
+		reasons = append(reasons, "scheduler_owner_missing")
+	} else if len(owners) > 1 {
+		reasons = append(reasons, "duplicate_scheduler_owners")
+	}
+	if evidence.RestoreTestedAt == nil {
+		reasons = append(reasons, "restore_evidence_missing")
+	}
+
+	state := "healthy"
+	recoverabilityState := models.HealthRecoverabilityStateHealthy
+	if len(reasons) != 0 {
+		state = "degraded"
+		recoverabilityState = models.HealthRecoverabilityStateDegraded
+	}
+	var owner *string
+	if len(owners) == 1 {
+		owner = &owners[0]
+	}
+	return &models.HealthBackup{
+		State: state, RepositoryReachable: &evidence.RepositoryReachable,
+		LatestFull: healthDateTime(evidence.LatestFull), LatestDifferential: healthDateTime(evidence.LatestDifferential),
+		Retention: retention, WalContinuous: evidence.WalContinuous, Locks: locks,
+		SchedulerOwner: owner, Fresh: &fresh,
+		FreshnessPolicy: stringPointer((time.Duration(evidence.FreshnessSeconds) * time.Second).String()),
+		RestoreTestedAt: healthDateTime(evidence.RestoreTestedAt),
+	}, &models.HealthRecoverability{State: recoverabilityState, Reasons: reasons}
+}
+
+func healthDateTime(value *time.Time) *strfmt.DateTime {
+	if value == nil {
+		return nil
+	}
+	result := strfmt.DateTime(*value)
+	return &result
+}
+
+func stringPointer(value string) *string { return &value }
 
 func healthTopology(cluster *storage.Cluster, servers []storage.Server) *models.HealthTopology {
 	sorted := append([]storage.Server(nil), servers...)

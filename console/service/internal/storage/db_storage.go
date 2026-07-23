@@ -863,6 +863,44 @@ func (s *dbStorage) GetClusterHealthOperations(ctx context.Context, clusterID in
 		OperationStatusFailed, OperationStatusCancelled)
 }
 
+func (s *dbStorage) UpsertBackupEvidence(ctx context.Context, evidence *BackupEvidence) error {
+	_, err := s.db.Exec(ctx, `
+		insert into cluster_backup_evidence (
+			cluster_id, observed_at, repository_reachable, latest_full, latest_differential,
+			retention, wal_continuous, locks, scheduler_owners, freshness_seconds, restore_tested_at
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		on conflict (cluster_id) do update set
+			observed_at = excluded.observed_at,
+			repository_reachable = excluded.repository_reachable,
+			latest_full = excluded.latest_full,
+			latest_differential = excluded.latest_differential,
+			retention = excluded.retention,
+			wal_continuous = excluded.wal_continuous,
+			locks = excluded.locks,
+			scheduler_owners = excluded.scheduler_owners,
+			freshness_seconds = excluded.freshness_seconds,
+			restore_tested_at = excluded.restore_tested_at,
+			updated_at = current_timestamp`,
+		evidence.ClusterID, evidence.ObservedAt, evidence.RepositoryReachable,
+		evidence.LatestFull, evidence.LatestDifferential, evidence.Retention,
+		evidence.WalContinuous, evidence.Locks, evidence.SchedulerOwners,
+		evidence.FreshnessSeconds, evidence.RestoreTestedAt,
+	)
+	return err
+}
+
+func (s *dbStorage) GetBackupEvidence(ctx context.Context, clusterID int64) (*BackupEvidence, error) {
+	evidence, err := QueryRowToStruct[BackupEvidence](ctx, s.db, `
+		select cluster_id, observed_at, repository_reachable, latest_full, latest_differential,
+			retention, wal_continuous, locks, scheduler_owners, freshness_seconds,
+			restore_tested_at, updated_at
+		from cluster_backup_evidence where cluster_id = $1`, clusterID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return evidence, err
+}
+
 func (s *dbStorage) CreateServer(ctx context.Context, req *CreateServerReq) (*Server, error) {
 	server, err := QueryRowToStruct[Server](ctx, s.db, `insert into servers(cluster_id, server_name, server_location, ip_address)	
 			values($1, $2, $3, $4) returning *`, req.ClusterID, req.ServerName, req.ServerLocation, req.IpAddress)

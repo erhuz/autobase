@@ -267,6 +267,21 @@ type ClusterHealthOperation struct {
 	SafeNextAction *string
 }
 
+type BackupEvidence struct {
+	ClusterID           int64
+	ObservedAt          time.Time
+	RepositoryReachable bool
+	LatestFull          *time.Time
+	LatestDifferential  *time.Time
+	Retention           []byte
+	WalContinuous       *bool
+	Locks               []byte
+	SchedulerOwners     []byte
+	FreshnessSeconds    int64
+	RestoreTestedAt     *time.Time
+	UpdatedAt           time.Time
+}
+
 type CreateOperationReq struct {
 	ProjectID         int64
 	ClusterID         int64
