@@ -48,8 +48,16 @@ func TestClusterHealthIncludesTopologyRoutingAndOperations(t *testing.T) {
 	if health.Dcs.State != "configured_not_observed" || strings.Join(health.Dcs.Members, ",") != "dcs-1,dcs-2" {
 		t.Fatalf("dcs = %+v", health.Dcs)
 	}
+	if health.Dcs.Reachable != nil {
+		t.Fatalf("unobserved DCS reported reachability = %v", *health.Dcs.Reachable)
+	}
 	if len(health.Routing.Targets) != 2 || health.Routing.Targets[0].Role != "primary" || *health.Routing.Targets[0].Port != 5000 {
 		t.Fatalf("routing = %+v", health.Routing)
+	}
+	for _, target := range health.Routing.Targets {
+		if target.Reachable != nil || target.RoleMatches != nil {
+			t.Fatalf("unobserved routing target reported health = %+v", target)
+		}
 	}
 	if health.Operation.Active.ID != 3 || health.Operation.Active.Finished != nil ||
 		health.Operation.Latest.ID != 2 || health.Operation.Unresolved.ID != 1 {

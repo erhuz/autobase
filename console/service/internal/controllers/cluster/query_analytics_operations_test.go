@@ -1,11 +1,53 @@
 package cluster
 
 import (
+	"context"
+	"encoding/json"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"postgresql-cluster-console/internal/configuration"
 	"postgresql-cluster-console/internal/storage"
+	"postgresql-cluster-console/models"
+	clusterapi "postgresql-cluster-console/restapi/operations/cluster"
+
+	"github.com/rs/zerolog"
 )
+
+type blockedPreflightStorage struct {
+	storage.IStorage
+	cluster   *storage.Cluster
+	servers   []storage.Server
+	preflight *storage.CreateOperationPreflightReq
+}
+
+func (s *blockedPreflightStorage) GetCluster(context.Context, int64) (*storage.Cluster, error) {
+	return s.cluster, nil
+}
+
+func (s *blockedPreflightStorage) GetClusterServers(context.Context, int64) ([]storage.Server, error) {
+	return s.servers, nil
+}
+
+func (s *blockedPreflightStorage) HasActiveOperation(context.Context, int64) (bool, error) {
+	return false, nil
+}
+
+func (s *blockedPreflightStorage) CreateOperationPreflight(_ context.Context, req *storage.CreateOperationPreflightReq) (*storage.OperationPreflight, error) {
+	s.preflight = req
+	return &storage.OperationPreflight{
+		ID: 1, ClusterID: req.ClusterID, Type: req.Type, Observed: req.Observed, Desired: req.Desired,
+		Checks: req.Checks, Blockers: req.Blockers, Plan: req.Plan, AffectedNodes: req.AffectedNodes,
+		Confirmation: req.Confirmation, TopologyHash: req.TopologyHash, ExpiresAt: req.ExpiresAt,
+	}, nil
+}
+
+type blockedPreflightWatcher struct{}
+
+func (blockedPreflightWatcher) Run()                                            {}
+func (blockedPreflightWatcher) Stop()                                           {}
+func (blockedPreflightWatcher) HandleCluster(context.Context, *storage.Cluster) {}
 
 func TestQueryAnalyticsPlanAndTopologyHash(t *testing.T) {
 	timeline := int64(4)
@@ -44,5 +86,38 @@ func TestQueryAnalyticsPlanAndTopologyHash(t *testing.T) {
 	servers[0].UpdatedAt = nil
 	if topologyFresh(servers, now.Add(-time.Second)) {
 		t.Fatal("stale topology was accepted")
+	}
+}
+
+func TestQueryAnalyticsPreflightReportsAndBlocksManagementDrift(t *testing.T) {
+	store := &blockedPreflightStorage{cluster: &storage.Cluster{
+		ID: 5, Status: storage.ClusterStatusReady, PostgreVersion: 13,
+	}}
+	operationType := storage.OperationTypeQueryAnalyticsEnable
+	response := NewQueryAnalyticsOperationsHandler(
+		store, nil, nil, blockedPreflightWatcher{}, &configuration.Config{}, zerolog.Nop(),
+	).HandlePreflight(clusterapi.PostClustersIDPreflightsParams{
+		ID: 5, HTTPRequest: httptest.NewRequest("POST", "/clusters/5/preflights", nil),
+		Body: &models.RequestOperationPreflight{Type: &operationType},
+	})
+	if _, ok := response.(*clusterapi.PostClustersIDPreflightsCreated); !ok || store.preflight == nil {
+		t.Fatalf("response=%#v preflight=%+v", response, store.preflight)
+	}
+
+	var blockers []string
+	if err := json.Unmarshal(store.preflight.Blockers, &blockers); err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		"PostgreSQL 14-18", "at least three healthy nodes", "exactly one leader",
+		"topology names resolved", "topology refreshed now",
+	} {
+		found := false
+		for _, blocker := range blockers {
+			found = found || blocker == required
+		}
+		if !found {
+			t.Errorf("missing blocker %q: %v", required, blockers)
+		}
 	}
 }

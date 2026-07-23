@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"postgresql-cluster-console/internal/configuration"
 	"postgresql-cluster-console/internal/controllers"
@@ -53,31 +54,32 @@ func (h *postClusterHandler) Handle(param cluster.PostClustersParams) middleware
 		return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(fmt.Errorf("cluster %s already exists", param.Body.Name), controllers.BaseError))
 	}
 
+	existing := param.Body.ExistingCluster != nil && *param.Body.ExistingCluster
 	var (
 		secretEnvs    []string
 		secretID      *int64
-		existing      bool = false
 		paramLocation ParamLocation
 	)
 	if param.Body.AuthInfo != nil {
-		secretEnvs, paramLocation, err = getSecretEnvs(param.HTTPRequest.Context(), h.log, h.db, param.Body.AuthInfo.SecretID, h.cfg.EncryptionKey)
-		if err != nil {
-			localLog.Error().Err(err).Msg("failed to get secret")
-
-			return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(fmt.Errorf("failed to get secret: %s", err.Error()), controllers.BaseError))
-		}
 		secretID = &param.Body.AuthInfo.SecretID
-		localLog.Trace().Msg("got secret")
+		if !existing {
+			secretEnvs, paramLocation, err = getSecretEnvs(param.HTTPRequest.Context(), h.log, h.db, param.Body.AuthInfo.SecretID, h.cfg.EncryptionKey)
+			if err != nil {
+				localLog.Error().Err(err).Msg("failed to get secret")
+
+				return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(fmt.Errorf("failed to get secret: %s", err.Error()), controllers.BaseError))
+			}
+			localLog.Trace().Msg("got secret")
+		}
 	} else {
 		localLog.Debug().Msg("AuthInfo is nil, secret is expected in envs from web")
 	}
 
-	if param.Body.ExistingCluster != nil && *param.Body.ExistingCluster {
-		existing = true
+	var ansibleLogEnv []string
+	if !existing {
+		ansibleLogEnv = h.getAnsibleLogEnv(param.Body.Name)
+		localLog.Trace().Strs("file_log", ansibleLogEnv).Msg("got file log name")
 	}
-
-	ansibleLogEnv := h.getAnsibleLogEnv(param.Body.Name)
-	localLog.Trace().Strs("file_log", ansibleLogEnv).Msg("got file log name")
 
 	extraVars := map[string]interface{}{}
 
@@ -85,23 +87,26 @@ func (h *postClusterHandler) Handle(param cluster.PostClustersParams) middleware
 		if m, ok := param.Body.ExtraVars.(map[string]interface{}); ok {
 			extraVars = m
 		} else {
-			localLog.Warn().Interface("extra_vars_raw", param.Body.ExtraVars).Msg("unexpected type for extra_vars, expected map[string]interface{}")
+			localLog.Warn().Msg("unexpected type for extra_vars, expected map[string]interface{}")
 		}
 	}
 
+	deploymentSecretVars := map[string]interface{}{}
 	if paramLocation == EnvParamLocation {
 		param.Body.Envs = append(param.Body.Envs, secretEnvs...)
 	} else if paramLocation == ExtraVarsParamLocation {
 		for _, kv := range secretEnvs {
 			parts := strings.SplitN(kv, "=", 2)
 			if len(parts) == 2 {
-				extraVars[parts[0]] = parts[1]
+				deploymentSecretVars[parts[0]] = parts[1]
 			}
 		}
 	}
 	param.Body.Envs = append(param.Body.Envs, ansibleLogEnv...)
 
-	h.addProxySettings(extraVars, &param, localLog)
+	if !existing {
+		h.addProxySettings(extraVars, &param, localLog)
+	}
 
 	const (
 		LocationExtraVar          = "server_location"
@@ -126,13 +131,13 @@ func (h *postClusterHandler) Handle(param cluster.PostClustersParams) middleware
 			decodedInventory, decodeErr := base64.StdEncoding.DecodeString(rawInventory)
 			if decodeErr != nil {
 				// If base64 decoding fails, treat it as plain JSON
-				localLog.Warn().Str("inventory_json", rawInventory).Err(decodeErr).Msg("base64 decode failed, trying as plain JSON")
+				localLog.Warn().Err(decodeErr).Msg("base64 decode failed, trying as plain JSON")
 				decodedInventory = []byte(rawInventory)
 			}
 
 			// Try to parse the decoded inventory as JSON
 			if err := json.Unmarshal(decodedInventory, &inventoryJson); err != nil {
-				localLog.Error().Str("inventory_json", string(decodedInventory)).Err(err).Msg("failed to parse inventory json")
+				localLog.Error().Err(err).Msg("failed to parse inventory json")
 				inventoryJsonVal = nil // to correct insert in db
 			} else {
 				// If successfully parsed, save it and calculate server count
@@ -147,6 +152,10 @@ func (h *postClusterHandler) Handle(param cluster.PostClustersParams) middleware
 	} else {
 		// For cloud providers, expect server count to be explicitly passed in extra vars
 		serverCount = getIntValFromExtraVars(extraVars, ServersExtraVar)
+	}
+
+	if existing && (len(inventoryJsonVal) == 0 || serverCount == 0) {
+		return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(errors.New("existing cluster requires a valid non-empty ANSIBLE_INVENTORY_JSON"), controllers.BaseError))
 	}
 
 	status := "deploying"
@@ -179,12 +188,17 @@ func (h *postClusterHandler) Handle(param cluster.PostClustersParams) middleware
 		extraVarsBytes = []byte("{}")
 	}
 	deploymentExtraVars := extraVarsBytes
-	if queryAnalyticsDesired {
-		deploymentVars := make(map[string]interface{}, len(extraVars)+1)
+	if !existing {
+		deploymentVars := make(map[string]interface{}, len(extraVars)+len(deploymentSecretVars)+1)
 		for key, value := range extraVars {
 			deploymentVars[key] = value
 		}
-		deploymentVars["query_analytics_monitor_password"] = queryAnalyticsPassword
+		for key, value := range deploymentSecretVars {
+			deploymentVars[key] = value
+		}
+		if queryAnalyticsDesired {
+			deploymentVars["query_analytics_monitor_password"] = queryAnalyticsPassword
+		}
 		deploymentExtraVars, mErr = json.Marshal(deploymentVars)
 		if mErr != nil {
 			return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(mErr, controllers.BaseError))
@@ -221,23 +235,15 @@ func (h *postClusterHandler) Handle(param cluster.PostClustersParams) middleware
 	if existing {
 		localLog.Info().Msg("existing_cluster=true; skipping the deployment process")
 
-		// Insert servers if inventory is present
-		if len(inventoryJsonVal) > 0 {
-			if inventoryJson.All.Children.Master.Hosts == nil {
-				inventoryJson.All.Children.Master.Hosts = make(map[string]interface{})
-				localLog.Debug().Msg("Master hosts map was nil")
-			}
-			if inventoryJson.All.Children.Replica.Hosts == nil {
-				inventoryJson.All.Children.Replica.Hosts = make(map[string]interface{})
-				localLog.Debug().Msg("Replica hosts map was nil")
-			}
-
-			// Insert master
-			for ip, hostData := range inventoryJson.All.Children.Master.Hosts {
+		for _, hosts := range []map[string]interface{}{
+			inventoryJson.All.Children.Master.Hosts,
+			inventoryJson.All.Children.Replica.Hosts,
+		} {
+			for ip, hostData := range hosts {
 				hostMap, ok := hostData.(map[string]interface{})
 				if !ok {
-					localLog.Warn().Str("ip", ip).Msg("invalid master host format")
-					continue
+					_ = h.db.DeleteCluster(param.HTTPRequest.Context(), createdCluster.ID)
+					return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(fmt.Errorf("invalid imported host format for %s", ip), controllers.BaseError))
 				}
 
 				hostname, _ := hostMap["hostname"].(string)
@@ -250,30 +256,7 @@ func (h *postClusterHandler) Handle(param cluster.PostClustersParams) middleware
 					IpAddress:      ip,
 				})
 				if err != nil {
-					localLog.Error().Err(err).Str("ip", ip).Msg("failed to insert master server")
-					return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(err, controllers.BaseError))
-				}
-			}
-
-			// Insert replicas
-			for ip, hostData := range inventoryJson.All.Children.Replica.Hosts {
-				hostMap, ok := hostData.(map[string]interface{})
-				if !ok {
-					localLog.Warn().Str("ip", ip).Msg("invalid replica host format")
-					continue
-				}
-
-				hostname, _ := hostMap["hostname"].(string)
-				location, _ := hostMap["server_location"].(string)
-
-				_, err = h.db.CreateServer(param.HTTPRequest.Context(), &storage.CreateServerReq{
-					ClusterID:      createdCluster.ID,
-					ServerName:     hostname,
-					ServerLocation: &location,
-					IpAddress:      ip,
-				})
-				if err != nil {
-					localLog.Error().Err(err).Str("ip", ip).Msg("failed to insert replica server")
+					_ = h.db.DeleteCluster(param.HTTPRequest.Context(), createdCluster.ID)
 					return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(err, controllers.BaseError))
 				}
 			}
@@ -342,7 +325,7 @@ func (h *postClusterHandler) addProxySettings(extraVars map[string]interface{}, 
 	}
 	if proxySetting != nil {
 		extraVars[proxySettingName] = proxySetting.Value
-		localLog.Info().Any("proxy_env", proxySetting.Value).Msg("proxy_env added to extra_vars JSON")
+		localLog.Info().Msg("proxy_env added to extra_vars JSON")
 	}
 }
 

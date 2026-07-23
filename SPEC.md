@@ -105,7 +105,7 @@ T1|x|add root management vision + migration baseline; verify formatting, referen
 T2|x|add stock `2.9.0` DB/config fixture + direct migration preservation test incl analytics schema|V12,V13,V14,V15,V32,V45,I.release,I.verify
 T3|x|extend Console DB operation/preflight/audit + query source/fingerprint/bucket/sample model + DB locks/retention|V19,V20,V21,V32,V40,V41,V42,V45,I.db,I.db.query,I.op.state
 T4|x|add unified health + all-node complete-bucket collectors + health/query GET APIs|V16,V17,V26,V41,V42,V43,V44,V45,I.api.health,I.api.query,I.authority,I.db.query
-T5|.|make import passive; report health/query capability drift + gate management|V3,V18,V34,V35,V39,V40,V44,V45,I.api.health,I.api.query,I.authority
+T5|x|make import passive; report health/query capability drift + gate management|V3,V18,V34,V35,V39,V40,V44,V45,I.api.health,I.api.query,I.authority
 T6|.|add shared preflight/confirm/launch + operation detail + query enable/disable + redaction|V4,V8,V19,V20,V21,V22,V28,V32,V34,V36,V40,V44,V45,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query
 T7|.|build cluster health + operation-center + query-performance UI on existing routes|V16,V17,V19,V20,V26,V34,V42,V43,V44,V45,I.ui.health,I.ui.ops,I.ui.query,I.api.health,I.api.ops,I.api.query
 T8|.|add guarded planned switchover vertical slice|V5,V21,V22,V23,V32,I.op.v1,I.automation
@@ -166,3 +166,6 @@ B36|2026-07-23|operation detail mapped running `updated_at` to terminal `finishe
 B37|2026-07-23|verification used repo-root file paths from nested workdir; formatter never ran|V47
 B38|2026-07-23|isolated full-service gate assumed absent `/home/erhuz/go/bin/swagger`; generation never ran|V47
 B39|2026-07-23|isolated service copy omitted sibling `console/db`; migration contract fixture unresolved|V47
+B40|2026-07-23|deployment password secret merged into persisted cluster extra vars|V44
+B41|2026-07-23|focused Go gate launched from repo root outside service module|V47
+B42|2026-07-23|sandbox blocked pinned Swagger command metadata lookup during validation|V47
