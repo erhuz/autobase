@@ -1084,7 +1084,7 @@ definitions:
     properties:
       type:
         type: string
-        enum: [switchover, query_analytics_enable, query_analytics_disable]
+        enum: [switchover, reload, rolling_restart, query_analytics_enable, query_analytics_disable]
       target:
         type: string
 

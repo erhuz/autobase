@@ -1,0 +1,108 @@
+---
+- name: vitabaks.autobase.reload_pgcluster | Refresh topology
+  hosts: postgres_cluster
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Define bind_address
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.bind_address
+      when: bind_address is not defined
+
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Require healthy Patroni member
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/health
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      changed_when: false
+      check_mode: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Detect current Patroni leader
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/leader
+        status_code: [200, 503]
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: reload_patroni_role
+      changed_when: false
+      check_mode: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Build current primary group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: primary
+        postgresql_exists: true
+      loop: "{{ groups['postgres_cluster'] }}"
+      when: hostvars[item].reload_patroni_role.status | default(0) == 200
+      changed_when: false
+      check_mode: false
+      run_once: true
+
+    - name: Require exactly one healthy leader
+      ansible.builtin.assert:
+        that:
+          - groups.get('primary', []) | length == 1
+      run_once: true
+
+    - name: Get current Patroni passwords
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.pre_checks
+        tasks_from: passwords
+      vars:
+        source_group: primary
+        postgresql_cluster_maintenance: true
+      when: patroni_superuser_password | default('') | length < 1
+
+- name: vitabaks.autobase.reload_pgcluster | Reload and verify
+  hosts: primary
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Verify Patroni DCS access
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - patronictl
+          - -c
+          - /etc/patroni/patroni.yml
+          - list
+          - --format
+          - json
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+      changed_when: false
+
+    - name: Reload PostgreSQL configuration through Patroni
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - patronictl
+          - -c
+          - /etc/patroni/patroni.yml
+          - reload
+          - "{{ patroni_cluster_name }}"
+          - --force
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+
+    - name: Verify topology and primary routing
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.update
+        tasks_from: verify_topology_routing

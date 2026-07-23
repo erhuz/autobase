@@ -109,7 +109,7 @@ T5|x|make import passive; report health/query capability drift + gate management
 T6|x|add shared preflight/confirm/launch + operation detail + query enable/disable + redaction|V4,V8,V19,V20,V21,V22,V28,V32,V34,V36,V40,V44,V45,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query
 T7|x|build cluster health + operation-center + query-performance UI on existing routes|V16,V17,V19,V20,V26,V34,V42,V43,V44,V45,I.ui.health,I.ui.ops,I.ui.query,I.api.health,I.api.ops,I.api.query
 T8|x|add guarded planned switchover vertical slice|V5,V21,V22,V23,V32,I.op.v1,I.automation
-T9|.|add reload + guarded rolling-restart + PGSM package/config/bootstrap/enable/disable vertical slices|V5,V21,V22,V24,V32,V35,V36,V37,V38,V39,V40,V44,V45,I.op.v1,I.automation,I.automation.query
+T9|x|add reload + guarded rolling-restart + PGSM package/config/bootstrap/enable/disable vertical slices|V5,V21,V22,V24,V32,V35,V36,V37,V38,V39,V40,V44,V45,I.op.v1,I.automation,I.automation.query
 T10|.|add guarded replica-reinit vertical slice|V5,V21,V22,V25,V32,I.op.v1,I.automation
 T11|.|add pgBackRest health, scheduler ownership, manual full/diff backup, restore evidence|V17,V21,V22,V26,V27,V32,I.op.v1,I.authority,I.automation
 T12|.|run v1 safety/query/e2e + stock-upgrade gates; publish backup/upgrade/verify/rollback docs + version set|V10,V12,V13,V14,V15,V32,V35,V37,V39,V40,V41,V42,V43,V44,V45,I.release,I.verify
@@ -173,3 +173,4 @@ B43|2026-07-23|cluster-health test used exact DCS value match inside labeled tex
 B44|2026-07-23|operation-detail test mock omitted refresh control dispatch hook|V45
 B45|2026-07-23|new operation views wrapped RTK hooks in callbacks; changed-surface lint failed|V45
 B46|2026-07-23|backup health card omitted retention + freshness policy evidence|V26
+B47|2026-07-23|migration + storage integration packages ran concurrently; storage queried before schema creation|V47

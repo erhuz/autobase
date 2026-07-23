@@ -21,49 +21,32 @@
       ansible.builtin.import_role:
         name: vitabaks.autobase.common
 
-    - name: "[Prepare] Get Patroni Cluster Leader Node"
+    - name: Require healthy Patroni member
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/health
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      changed_when: false
+      check_mode: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Detect current Patroni leader
       ansible.builtin.uri:
         url: >-
           {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
             | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
             | default('8008') }}/leader
-        status_code: 200
+        status_code: [200, 503]
         ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
-      register: restart_patroni_leader_result
+      register: restart_patroni_role
       changed_when: false
-      failed_when: false
       check_mode: false
       environment:
         no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
-      when:
-        - (groups.get('postgres_cluster', [])
-            | map('extract', hostvars)
-            | selectattr('patroni_leader_result.status', 'defined')
-            | selectattr('patroni_leader_result.status', 'equalto', 200)
-            | list | length) == 0
-
-    - name: "[Prepare] Set Patroni leader result variable"
-      ansible.builtin.set_fact:
-        leader_result: >-
-          {{
-            restart_patroni_leader_result
-            if restart_patroni_leader_result.status is defined
-            else patroni_leader_result | default({})
-          }}
-      changed_when: false
-
-    - name: The Patroni cluster is unhealthy
-      ansible.builtin.fail:
-        msg: >
-          No healthy leader node detected in cluster '{{ patroni_cluster_name | default('postgres-cluster') }}'.
-          Please ensure the cluster is up and node responds on REST API port ({{ patroni_restapi_port | default('8008') }}).
-      when:
-        - inventory_hostname == groups['postgres_cluster'][0]
-        - (groups.get('postgres_cluster', [])
-            | map('extract', hostvars)
-            | selectattr('leader_result.status', 'defined')
-            | selectattr('leader_result.status', 'equalto', 200)
-            | list | length) == 0
 
     - name: '[Prepare] Add host to group "primary" (in-memory inventory)'
       ansible.builtin.add_host:
@@ -71,10 +54,11 @@
         groups: primary
         postgresql_exists: true
       when:
-        - hostvars[item]['leader_result']['status'] | default(0) == 200
+        - hostvars[item].restart_patroni_role.status | default(0) == 200
       loop: "{{ groups['postgres_cluster'] }}"
       changed_when: false
       check_mode: false
+      run_once: true
 
     - name: '[Prepare] Add hosts to group "secondary" (in-memory inventory)'
       ansible.builtin.add_host:
@@ -82,10 +66,18 @@
         groups: secondary
         postgresql_exists: true
       when:
-        - hostvars[item]['leader_result']['status'] | default(0) == 503
+        - hostvars[item].restart_patroni_role.status | default(0) == 503
       loop: "{{ groups['postgres_cluster'] }}"
       changed_when: false
       check_mode: false
+      run_once: true
+
+    - name: Require one leader and two healthy replicas
+      ansible.builtin.assert:
+        that:
+          - groups.get('primary', []) | length == 1
+          - groups.get('secondary', []) | length >= 2
+      run_once: true
 
     - name: "Print Patroni Cluster info"
       ansible.builtin.debug:
@@ -133,6 +125,11 @@
         name: vitabaks.autobase.update
         tasks_from: start_traffic
 
+    - name: Verify topology and primary routing
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.update
+        tasks_from: verify_topology_routing
+
 - name: vitabaks.autobase.restart_pgcluster | Restart patroni on master
   hosts: primary
   gather_facts: false
@@ -168,3 +165,8 @@
         name: vitabaks.autobase.update
         tasks_from: start_traffic
       when: groups.get('secondary', []) | length > 0
+
+    - name: Verify topology and primary routing
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.update
+        tasks_from: verify_topology_routing

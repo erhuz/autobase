@@ -1,0 +1,38 @@
+---
+- name: Verify guarded maintenance operation contracts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check reload, rolling restart, topology, and routing guards
+      ansible.builtin.assert:
+        that:
+          - reload_command in reload_playbook
+          - dcs_check in reload_playbook
+          - verify_import in reload_playbook
+          - stop_services not in reload_playbook
+          - start_services not in reload_playbook
+          - serial_restart in restart_playbook
+          - replica_guard in restart_playbook
+          - switchover in restart_playbook
+          - "restart_playbook | regex_findall(verify_import) | length == 2"
+          - health_check in verification_tasks
+          - role_check in verification_tasks
+          - routing_check in verification_tasks
+          - redaction in verification_tasks
+      vars:
+        reload_playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/reload_pgcluster.yml') }}"
+        restart_playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/restart_pgcluster.yml') }}"
+        verification_tasks: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/update/tasks/verify_topology_routing.yml') }}"
+        reload_command: Reload PostgreSQL configuration through Patroni
+        dcs_check: Verify Patroni DCS access
+        verify_import: "tasks_from: verify_topology_routing"
+        stop_services: "tasks_from: stop_services"
+        start_services: "tasks_from: start_services"
+        serial_restart: "serial: 1"
+        replica_guard: "groups.get('secondary', []) | length >= 2"
+        switchover: "tasks_from: switchover"
+        health_check: /health
+        role_check: "status_code: [200, 503]"
+        routing_check: select pg_is_in_recovery()
+        redaction: "no_log: true"

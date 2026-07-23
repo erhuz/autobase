@@ -17,6 +17,8 @@ const (
 
 	OperationTypeDeploy                = "deploy"
 	OperationTypeSwitchover            = "switchover"
+	OperationTypeReload                = "reload"
+	OperationTypeRollingRestart        = "rolling_restart"
 	OperationTypeQueryAnalyticsEnable  = "query_analytics_enable"
 	OperationTypeQueryAnalyticsDisable = "query_analytics_disable"
 

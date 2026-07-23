@@ -209,7 +209,7 @@ func TestGuardedOperationRejectsUnsupportedAndChangedObservedState(t *testing.T)
 		},
 	}
 	handler := NewGuardedOperationsHandler(store, nil, nil, blockedPreflightWatcher{}, &configuration.Config{}, zerolog.Nop())
-	unsupported := "rolling_restart"
+	unsupported := "arbitrary"
 	response := handler.HandlePreflight(clusterapi.PostClustersIDPreflightsParams{
 		ID: 5, HTTPRequest: httptest.NewRequest("POST", "/clusters/5/preflights", nil),
 		Body: &models.RequestOperationPreflight{Type: &unsupported},

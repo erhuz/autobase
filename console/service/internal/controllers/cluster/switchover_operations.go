@@ -17,16 +17,16 @@ const (
 	defaultSwitchoverMaxLag = int64(1 << 20)
 )
 
-type switchoverRoutingTarget struct {
+type operationRoutingTarget struct {
 	Address string `json:"address"`
 	Port    int64  `json:"port"`
 }
 
 type switchoverDesired struct {
-	Target          string                    `json:"target"`
-	PreviousLeader  string                    `json:"previous_leader"`
-	MaxCandidateLag int64                     `json:"max_candidate_lag"`
-	Routing         []switchoverRoutingTarget `json:"routing"`
+	Target          string                   `json:"target"`
+	PreviousLeader  string                   `json:"previous_leader"`
+	MaxCandidateLag int64                    `json:"max_candidate_lag"`
+	Routing         []operationRoutingTarget `json:"routing"`
 }
 
 func (h *guardedOperationsHandler) switchoverPreflightState(ctx context.Context, clusterInfo *storage.Cluster, target string) (*guardedPreflight, error) {
@@ -179,18 +179,18 @@ func switchoverLagPolicy(extraVars []byte) (int64, bool) {
 	return 0, false
 }
 
-func primaryRoutingTargets(connectionInfo any) []switchoverRoutingTarget {
+func primaryRoutingTargets(connectionInfo any) []operationRoutingTarget {
 	routing := healthRouting(connectionInfo)
-	targets := make([]switchoverRoutingTarget, 0)
+	targets := make([]operationRoutingTarget, 0)
 	for _, target := range routing.Targets {
 		if target.Role == "primary" && target.Address != "" && target.Port != nil {
-			targets = append(targets, switchoverRoutingTarget{Address: target.Address, Port: *target.Port})
+			targets = append(targets, operationRoutingTarget{Address: target.Address, Port: *target.Port})
 		}
 	}
 	return targets
 }
 
-func routingSummary(targets []switchoverRoutingTarget) string {
+func routingSummary(targets []operationRoutingTarget) string {
 	values := make([]string, len(targets))
 	for i, target := range targets {
 		values[i] = target.Address + ":" + strconv.FormatInt(target.Port, 10)
