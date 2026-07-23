@@ -18,6 +18,8 @@ skip_list:
   - name[casing] # TODO: All names should start with an uppercase letter.
   - risky-file-permissions # TODO: File permissions unset or incorrect.
   - role-name # TODO: Avoid using paths when importing roles. Role name XXX does not match ``^*$`` pattern.
+  - partial-become # Play-level privilege escalation is intentional.
+  - run-once # One-shot tasks use Ansible's default linear strategy.
   - schema[playbook] # TODO: Use FQCN for `become_method`.
   - schema[tasks] # TODO: Use FQCN for `become_method`.
   - galaxy[no-changelog]

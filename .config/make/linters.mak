@@ -24,7 +24,7 @@ linter-ansible-lint: prepare-collections ## Lint Ansible files using ansible-lin
 	echo "ansible-lint #########################################################"
 	$(ACTIVATE_VENV) && \
 	ANSIBLE_COLLECTIONS_PATH=$(COLLECTION_ROOT) \
-	ansible-lint --force-color --parseable ./automation
+	ansible-lint --force-color --format=pep8 ./automation
 
 .PHONY: linter-yamllint
 linter-yamllint: ## Lint YAML files using yamllint

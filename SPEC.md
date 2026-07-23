@@ -178,3 +178,5 @@ B48|2026-07-23|standalone replica-reinit syntax gate lacked repo collection layo
 B49|2026-07-23|Ansible Galaxy install used read-only default cache despite temp dirs|V45
 B50|2026-07-23|UI API generator targeted absent obsolete directory + returned success without output|V47
 B51|2026-07-23|backup observer startup omitted controller import; full generated-source service gate failed|V47
+B52|2026-07-23|ansible-lint 26.4 made intentional play-level become + linear run-once patterns fatal; CI failed|V45
+B53|2026-07-23|CI installed Python 3.14 but bootstrap silently selected stale 3.12 pin|V45
