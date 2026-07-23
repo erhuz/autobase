@@ -94,6 +94,8 @@ V44: literals, client IP, comments, plans, error text, credentials, raw collecto
 V45: tests cover package matrix, privacy drift, serial rollout failure, switchover, duplicate ingest, retention, coverage gaps, stock `2.9.0` migration.
 V46: Console Go verification runs `-mod=readonly`; committed `go.mod` + `go.sum` resolve together.
 V47: checkout-safe Go gate targets committed packages; full service gate runs after Swagger generation.
+V48: query-performance filters have programmatic labels + keyboard-operable native controls.
+V49: query-performance refresh/filter change advances window end; stale window refetch ⊥.
 
 ## §T
 
@@ -118,7 +120,7 @@ T17|.|phase 3 supported extension + PgBouncer pool/limit management|V7,V31,I.api
 T18|x|add PGSM package/config/default-on bootstrap + contract tests|V33,V34,V35,V38,V39,V40,V44,V45,I.automation.query,I.verify
 T19|x|add analytics Console DB schema + migration/storage tests|V12,V13,V14,V40,V41,V42,V44,V45,V46,V47,I.db.query,I.release,I.verify
 T20|x|add all-node PGSM collector + query-performance APIs|V34,V39,V40,V41,V42,V43,V44,V45,I.api.query,I.db.query,I.verify
-T21|.|add query-performance UI + status/filter/trend/detail tests|V34,V42,V43,V44,V45,I.ui.query,I.api.query,I.verify
+T21|x|add query-performance UI + status/filter/trend/detail tests|V34,V42,V43,V44,V45,V48,V49,I.ui.query,I.api.query,I.verify
 T22|.|add guarded PGSM enable/disable preflight + serial HA operation|V4,V5,V19,V20,V21,V22,V24,V34,V36,V37,V38,V39,V40,V44,V45,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query,I.verify
 
 ## §B
@@ -135,3 +137,13 @@ B8|2026-07-22|current generated Swagger source imported split swag helpers absen
 B9|2026-07-22|unquoted PostgreSQL test DSN triggered zsh glob expansion before integration test|V47
 B10|2026-07-22|sandbox denied localhost socket for disposable PostgreSQL integration test|V47
 B11|2026-07-22|Docker TRACE logger emitted request/response bodies containing deployment credentials|V44
+B12|2026-07-22|UI verification could not start because checkout dependencies were absent|V45
+B13|2026-07-22|npm fallback rejected existing ESLint peer mismatch before UI dependency install|V45
+B14|2026-07-22|whole-tree TypeScript check exceeded 120s under unsupported local Node 25 toolchain|V45
+B15|2026-07-22|narrow UI typecheck reached pre-existing store reducer and overview prop errors outside query analytics|V45
+B16|2026-07-22|rendered query-performance test used `.ts` extension despite JSX; transform failed|V45
+B17|2026-07-22|query-performance component test assumed jest-dom matchers absent from Vitest setup|V45
+B18|2026-07-22|query-performance filter labels were not programmatically associated with select controls|V48
+B19|2026-07-22|full UI suite hit pre-existing jsdom `localStorage` failures in cluster transform tests|V45
+B20|2026-07-22|cluster overview invoked RTK query hook through callback; changed-surface lint failed|V45
+B21|2026-07-22|query-performance refresh reused initial time-window end and could return stale data|V49

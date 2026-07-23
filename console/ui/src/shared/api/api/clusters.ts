@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/consistent-type-definitions */
-
 import { baseApi as api } from '../baseApi.ts';
 
 const injectedRtkApi = api.injectEndpoints({
@@ -38,6 +36,24 @@ const injectedRtkApi = api.injectEndpoints({
     getClustersById: build.query<GetClustersByIdApiResponse, GetClustersByIdApiArg>({
       query: (queryArg) => ({ url: `/clusters/${queryArg.id}` }),
       providesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
+    }),
+    getClustersByIdQueryPerformance: build.query<
+      GetClustersByIdQueryPerformanceApiResponse,
+      GetClustersByIdQueryPerformanceApiArg
+    >({
+      query: (queryArg) => ({
+        url: `/clusters/${queryArg.id}/query-performance`,
+        params: queryPerformanceParams(queryArg),
+      }),
+    }),
+    getClustersByIdQueryPerformanceFingerprintId: build.query<
+      GetClustersByIdQueryPerformanceFingerprintIdApiResponse,
+      GetClustersByIdQueryPerformanceFingerprintIdApiArg
+    >({
+      query: (queryArg) => ({
+        url: `/clusters/${queryArg.id}/query-performance/${encodeURIComponent(queryArg.fingerprintId)}`,
+        params: queryPerformanceParams(queryArg),
+      }),
     }),
     deleteClustersById: build.mutation<DeleteClustersByIdApiResponse, DeleteClustersByIdApiArg>({
       query: (queryArg) => ({ url: `/clusters/${queryArg.id}`, method: 'DELETE' }),
@@ -145,6 +161,21 @@ export type GetClustersByIdApiResponse = /** status 200 OK */ ClusterInfo;
 export type GetClustersByIdApiArg = {
   id: number;
 };
+export type QueryPerformanceApiArg = {
+  id: number;
+  from?: string;
+  to?: string;
+  serverId?: number;
+  database?: string;
+  role?: string;
+  application?: string;
+};
+export type GetClustersByIdQueryPerformanceApiResponse = ResponseQueryPerformance;
+export type GetClustersByIdQueryPerformanceApiArg = QueryPerformanceApiArg;
+export type GetClustersByIdQueryPerformanceFingerprintIdApiResponse = ResponseQueryPerformanceDetail;
+export type GetClustersByIdQueryPerformanceFingerprintIdApiArg = QueryPerformanceApiArg & {
+  fingerprintId: string;
+};
 export type DeleteClustersByIdApiResponse = /** status 204 OK */ void;
 export type DeleteClustersByIdApiArg = {
   id: number;
@@ -207,6 +238,69 @@ export type RequestClusterCreate = {
   envs?: string[];
   extra_vars?: string[];
   existing_cluster?: boolean;
+  query_analytics_enabled?: boolean;
+};
+export type QueryPerformanceMetrics = {
+  calls?: number;
+  total_exec_time_ms?: number;
+  max_exec_time_ms?: number;
+  mean_exec_time_ms?: number;
+  rows?: number;
+  shared_blocks_hit?: number;
+  shared_blocks_read?: number;
+  temp_blocks_read?: number;
+  temp_blocks_written?: number;
+  read_time_ms?: number;
+  write_time_ms?: number;
+  wal_bytes?: number;
+};
+export type QueryPerformanceStatus = {
+  state?: 'unsupported' | 'rollout_required' | 'disabled' | 'collecting' | 'enabled' | 'degraded';
+  managed?: boolean;
+  desired?: boolean;
+  postgres_version?: number;
+  expected_node_count?: number;
+  collected_node_count?: number;
+};
+export type QueryPerformanceCoverage = {
+  server_id?: number;
+  server_name?: string;
+  server_role?: string;
+  server_status?: string;
+  collection_status?: string;
+  extension_version?: string | null;
+  last_bucket_start?: string | null;
+  last_collected_at?: string | null;
+  last_error_code?: string | null;
+};
+export type QueryPerformancePoint = {
+  bucket_start?: string;
+  metrics?: QueryPerformanceMetrics;
+};
+export type QueryPerformanceQuery = {
+  fingerprint_id?: string;
+  normalized_query?: string;
+  metrics?: QueryPerformanceMetrics;
+  top_total_time?: boolean;
+  top_max_latency?: boolean;
+};
+export type QueryPerformanceFilters = {
+  databases?: string[];
+  roles?: string[];
+  applications?: string[];
+};
+export type ResponseQueryPerformance = {
+  status?: QueryPerformanceStatus;
+  coverage?: QueryPerformanceCoverage[];
+  summary?: QueryPerformanceMetrics;
+  series?: QueryPerformancePoint[];
+  queries?: QueryPerformanceQuery[];
+  filters?: QueryPerformanceFilters;
+};
+export type ResponseQueryPerformanceDetail = {
+  fingerprint?: QueryPerformanceQuery;
+  series?: QueryPerformancePoint[];
+  histogram?: number[];
 };
 export type ClusterInfoInstance = {
   id?: number;
@@ -260,6 +354,10 @@ export const {
   useLazyGetClustersDefaultNameQuery,
   useGetClustersByIdQuery,
   useLazyGetClustersByIdQuery,
+  useGetClustersByIdQueryPerformanceQuery,
+  useLazyGetClustersByIdQueryPerformanceQuery,
+  useGetClustersByIdQueryPerformanceFingerprintIdQuery,
+  useLazyGetClustersByIdQueryPerformanceFingerprintIdQuery,
   useDeleteClustersByIdMutation,
   usePostClustersByIdRefreshMutation,
   usePostClustersByIdReinitMutation,
@@ -269,3 +367,12 @@ export const {
   usePostClustersByIdStartMutation,
   usePostClustersByIdRemoveMutation,
 } = injectedRtkApi;
+
+const queryPerformanceParams = (queryArg: QueryPerformanceApiArg) => ({
+  from: queryArg.from,
+  to: queryArg.to,
+  server_id: queryArg.serverId,
+  database: queryArg.database,
+  role: queryArg.role,
+  application: queryArg.application,
+});
