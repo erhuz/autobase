@@ -834,6 +834,22 @@ func (s *dbStorage) GetOperation(ctx context.Context, id int64) (*Operation, err
 	return operation, nil
 }
 
+func (s *dbStorage) GetClusterHealthOperations(ctx context.Context, clusterID int64) ([]ClusterHealthOperation, error) {
+	const fields = `id, operation_type, operation_status, created_at, updated_at, safe_next_action`
+	return QueryRowsToStruct[ClusterHealthOperation](ctx, s.db, `
+		(select `+fields+` from operations where cluster_id = $1 and operation_status in ($2,$3)
+		 order by created_at desc, id desc limit 1)
+		union
+		(select `+fields+` from operations where cluster_id = $1 and operation_status in ($4,$5,$6)
+		 order by created_at desc, id desc limit 1)
+		union
+		(select `+fields+` from operations where cluster_id = $1 and operation_status = $5
+		 order by created_at desc, id desc limit 1)
+		order by created_at desc, id desc`,
+		clusterID, OperationStatusQueued, OperationStatusRunning, OperationStatusSucceeded,
+		OperationStatusFailed, OperationStatusCancelled)
+}
+
 func (s *dbStorage) CreateServer(ctx context.Context, req *CreateServerReq) (*Server, error) {
 	server, err := QueryRowToStruct[Server](ctx, s.db, `insert into servers(cluster_id, server_name, server_location, ip_address)	
 			values($1, $2, $3, $4) returning *`, req.ClusterID, req.ServerName, req.ServerLocation, req.IpAddress)

@@ -393,6 +393,26 @@ paths:
           schema:
             $ref: "#/definitions/Response.Error"
 
+  /clusters/{id}/health:
+    get:
+      summary: "Get cluster health snapshot"
+      tags:
+        - cluster
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: "#/definitions/Response.ClusterHealth"
+        '400':
+          description: Error
+          schema:
+            $ref: "#/definitions/Response.Error"
+
   /clusters/{id}/query-performance:
     get:
       summary: "Get cluster query performance overview"
@@ -1166,6 +1186,198 @@ definitions:
         type: string
         format: date-time
         x-nullable: true
+
+  Response.ClusterHealth:
+    type: object
+    required: [observed_at, topology, dcs, routing, backup, operation, recoverability]
+    properties:
+      observed_at:
+        type: string
+        format: date-time
+      topology:
+        $ref: '#/definitions/Health.Topology'
+      dcs:
+        $ref: '#/definitions/Health.DCS'
+      routing:
+        $ref: '#/definitions/Health.Routing'
+      backup:
+        $ref: '#/definitions/Health.Backup'
+      operation:
+        $ref: '#/definitions/Health.OperationSummary'
+      recoverability:
+        $ref: '#/definitions/Health.Recoverability'
+
+  Health.Member:
+    type: object
+    properties:
+      name:
+        type: string
+      role:
+        type: string
+      state:
+        type: string
+      timeline:
+        type: integer
+        format: int64
+        x-nullable: true
+      lag:
+        type: integer
+        format: int64
+        x-nullable: true
+      pending_restart:
+        type: boolean
+        x-nullable: true
+
+  Health.Topology:
+    type: object
+    properties:
+      state:
+        type: string
+      observed_at:
+        type: string
+        format: date-time
+        x-nullable: true
+      patroni_reachable:
+        type: boolean
+        x-nullable: true
+      leader:
+        $ref: '#/definitions/Health.Member'
+        x-nullable: true
+      replicas:
+        type: array
+        items:
+          $ref: '#/definitions/Health.Member'
+      members:
+        type: array
+        items:
+          $ref: '#/definitions/Health.Member'
+
+  Health.DCS:
+    type: object
+    properties:
+      state:
+        type: string
+      type:
+        type: string
+      reachable:
+        type: boolean
+        x-nullable: true
+      members:
+        type: array
+        items:
+          type: string
+
+  Health.RoutingTarget:
+    type: object
+    properties:
+      role:
+        type: string
+      address:
+        type: string
+      port:
+        type: integer
+        format: int64
+        x-nullable: true
+      reachable:
+        type: boolean
+        x-nullable: true
+      role_matches:
+        type: boolean
+        x-nullable: true
+
+  Health.Routing:
+    type: object
+    properties:
+      state:
+        type: string
+      targets:
+        type: array
+        items:
+          $ref: '#/definitions/Health.RoutingTarget'
+
+  Health.Backup:
+    type: object
+    properties:
+      state:
+        type: string
+      repository_reachable:
+        type: boolean
+        x-nullable: true
+      latest_full:
+        type: string
+        format: date-time
+        x-nullable: true
+      latest_differential:
+        type: string
+        format: date-time
+        x-nullable: true
+      retention:
+        type: object
+        additionalProperties: true
+      wal_continuous:
+        type: boolean
+        x-nullable: true
+      locks:
+        type: array
+        items:
+          type: string
+      scheduler_owner:
+        type: string
+        x-nullable: true
+      fresh:
+        type: boolean
+        x-nullable: true
+      freshness_policy:
+        type: string
+        x-nullable: true
+      restore_tested_at:
+        type: string
+        format: date-time
+        x-nullable: true
+
+  Health.Operation:
+    type: object
+    properties:
+      id:
+        type: integer
+      type:
+        type: string
+      status:
+        type: string
+      started:
+        type: string
+        format: date-time
+      finished:
+        type: string
+        format: date-time
+        x-nullable: true
+      safe_next_action:
+        type: string
+        x-nullable: true
+
+  Health.OperationSummary:
+    type: object
+    properties:
+      active:
+        $ref: '#/definitions/Health.Operation'
+        x-nullable: true
+      latest:
+        $ref: '#/definitions/Health.Operation'
+        x-nullable: true
+      unresolved:
+        $ref: '#/definitions/Health.Operation'
+        x-nullable: true
+
+  Health.Recoverability:
+    type: object
+    properties:
+      state:
+        type: string
+        enum: [healthy, degraded]
+      reasons:
+        type: array
+        items:
+          type: string
 
   Response.Version:
     title: Version response

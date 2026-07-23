@@ -57,6 +57,7 @@ type IStorage interface {
 	ReserveOperation(ctx context.Context, req *CreateOperationReq) (*Operation, error)
 	GetOperations(ctx context.Context, req *GetOperationsReq) ([]OperationView, *MetaPagination, error)
 	GetOperation(ctx context.Context, id int64) (*Operation, error)
+	GetClusterHealthOperations(ctx context.Context, clusterID int64) ([]ClusterHealthOperation, error)
 	UpdateOperation(ctx context.Context, req *UpdateOperationReq) (*Operation, error)
 	GetInProgressOperations(ctx context.Context, from time.Time) ([]Operation, error)
 	HasActiveOperation(ctx context.Context, clusterID int64) (bool, error)

@@ -258,6 +258,15 @@ type OperationView struct {
 	Environment string
 }
 
+type ClusterHealthOperation struct {
+	ID             int64
+	Type           string
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      *time.Time
+	SafeNextAction *string
+}
+
 type CreateOperationReq struct {
 	ProjectID         int64
 	ClusterID         int64

@@ -103,6 +103,7 @@ func NewService(
 	api.OperationGetOperationsIDLogHandler = operation.NewGetOperationLogHandler(db)
 	api.ClusterGetClustersHandler = cluster.NewGetClustersHandler(db, log.Logger)
 	api.ClusterGetClustersIDHandler = cluster.NewGetClusterHandler(db, log.Logger)
+	api.ClusterGetClustersIDHealthHandler = cluster.NewGetHealthHandler(db)
 	api.ClusterGetClustersIDQueryPerformanceHandler = cluster.NewGetQueryPerformanceHandler(db)
 	api.ClusterGetClustersIDQueryPerformanceFingerprintIDHandler = cluster.NewGetQueryPerformanceDetailHandler(db)
 	queryOperations := cluster.NewQueryAnalyticsOperationsHandler(db, dockerManager, logCollector, clusterWatcher, cfg, log.Logger)

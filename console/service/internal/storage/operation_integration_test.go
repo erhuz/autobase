@@ -142,6 +142,18 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	healthOperations, err := store.GetClusterHealthOperations(ctx, cluster.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var healthActive, healthLatest bool
+	for _, operation := range healthOperations {
+		healthActive = healthActive || operation.ID == second.ID
+		healthLatest = healthLatest || operation.ID == first.ID
+	}
+	if !healthActive || !healthLatest {
+		t.Fatalf("health operations = %+v", healthOperations)
+	}
 	cancelled := OperationStatusCancelled
 	if _, err = store.UpdateOperation(ctx, &UpdateOperationReq{ID: second.ID, Status: &cancelled}); err != nil {
 		t.Fatal(err)
