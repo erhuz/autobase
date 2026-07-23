@@ -227,16 +227,23 @@ type UpdateClusterReq struct {
 }
 
 type Operation struct {
-	ID         int64
-	ProjectID  int64
-	ClusterID  int64
-	DockerCode string
-	Cid        string
-	Type       string
-	Status     string
-	Log        *string
-	CreatedAt  time.Time
-	UpdatedAt  *time.Time
+	ID                int64
+	ProjectID         int64
+	ClusterID         int64
+	DockerCode        string
+	Cid               string
+	Type              string
+	Status            string
+	Log               *string
+	CreatedAt         time.Time
+	UpdatedAt         *time.Time
+	Actor             string
+	SanitizedParams   []byte
+	PreflightSnapshot []byte
+	Plan              []byte
+	AffectedNodes     []byte
+	FinalVerification []byte
+	SafeNextAction    *string
 }
 
 type OperationView struct {
@@ -252,17 +259,56 @@ type OperationView struct {
 }
 
 type CreateOperationReq struct {
-	ProjectID  int64
-	ClusterID  int64
-	DockerCode string
-	Type       string
-	Cid        string
+	ProjectID         int64
+	ClusterID         int64
+	DockerCode        string
+	Type              string
+	Cid               string
+	Actor             string
+	SanitizedParams   []byte
+	PreflightSnapshot []byte
+	Plan              []byte
+	AffectedNodes     []byte
 }
 
 type UpdateOperationReq struct {
-	ID     int64
-	Status *string
-	Logs   *string
+	ID                int64
+	Status            *string
+	Logs              *string
+	DockerCode        *string
+	FinalVerification []byte
+	SafeNextAction    *string
+}
+
+type OperationPreflight struct {
+	ID            int64
+	ClusterID     int64
+	Type          string
+	Observed      []byte
+	Desired       []byte
+	Checks        []byte
+	Blockers      []byte
+	Plan          []byte
+	AffectedNodes []byte
+	Confirmation  string
+	TopologyHash  string
+	ExpiresAt     time.Time
+	ConsumedAt    *time.Time
+	CreatedAt     time.Time
+}
+
+type CreateOperationPreflightReq struct {
+	ClusterID     int64
+	Type          string
+	Observed      []byte
+	Desired       []byte
+	Checks        []byte
+	Blockers      []byte
+	Plan          []byte
+	AffectedNodes []byte
+	Confirmation  string
+	TopologyHash  string
+	ExpiresAt     time.Time
 }
 
 type GetOperationsReq struct {

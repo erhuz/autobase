@@ -29,7 +29,7 @@ func getSecretEnvs(ctx context.Context, log zerolog.Logger, db storage.IStorage,
 	if err != nil {
 		return nil, UnknownParamLocation, err
 	}
-	localLog.Trace().Msgf("secretVal %s", string(secretVal))
+	localLog.Trace().Msg("secret value loaded")
 
 	switch models.SecretType(secretView.Type) {
 	case models.SecretTypeAws:

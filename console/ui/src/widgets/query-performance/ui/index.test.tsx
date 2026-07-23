@@ -1,10 +1,24 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 import '@shared/i18n/i18n';
 import QueryPerformance, { buildQueryPerformanceArgs, normalizeBars, queryPerformanceStatusConfig } from './index';
 
-const api = vi.hoisted(() => ({ getDetail: vi.fn(), getOverview: vi.fn() }));
+const api = vi.hoisted(() => ({
+  getDetail: vi.fn(),
+  getOverview: vi.fn(),
+  preflight: vi.fn(() => ({
+    unwrap: () =>
+      Promise.resolve({
+        id: 11,
+        confirmation: 'DISABLE QUERY ANALYTICS',
+        blockers: [],
+        affected_nodes: ['postgresql-2', 'postgresql-1'],
+        plan: ['configure and verify replica postgresql-2', 'controlled switchover from postgresql-1'],
+      }),
+  })),
+  start: vi.fn(() => ({ unwrap: () => Promise.resolve({ operation_id: 17, status: 'running' }) })),
+}));
 
 vi.mock('@shared/api/api/clusters.ts', () => ({
   useGetClustersByIdQueryPerformanceQuery: (args: unknown) => {
@@ -41,6 +55,8 @@ vi.mock('@shared/api/api/clusters.ts', () => ({
       isFetching: false,
     },
   ],
+  usePostClustersByIdPreflightsMutation: () => [api.preflight, { isLoading: false }],
+  usePostClustersByIdOperationsMutation: () => [api.start, { isLoading: false }],
 }));
 
 describe('query performance UI', () => {
@@ -92,5 +108,21 @@ describe('query performance UI', () => {
     expect(api.getDetail).toHaveBeenCalledWith(expect.objectContaining({ id: 7, fingerprintId: '42' }));
     expect(screen.getByRole('img', { name: 'Latency distribution' })).toBeInTheDocument();
     clock.mockRestore();
+  });
+
+  it('requires the exact preflight confirmation before launch', async () => {
+    cleanup();
+    const view = render(<QueryPerformance clusterId={7} />);
+    fireEvent.click(view.getByRole('button', { name: 'Disable analytics' }));
+    const confirmation = await view.findByLabelText('Confirmation phrase');
+    expect(view.getByRole('button', { name: 'Start operation' })).toBeDisabled();
+    fireEvent.change(confirmation, { target: { value: 'DISABLE QUERY ANALYTICS' } });
+    fireEvent.click(view.getByRole('button', { name: 'Start operation' }));
+    await waitFor(() =>
+      expect(api.start).toHaveBeenCalledWith({
+        id: 7,
+        requestOperationStart: { preflight_id: 11, confirmation: 'DISABLE QUERY ANALYTICS' },
+      }),
+    );
   });
 });

@@ -177,3 +177,10 @@ func (s *dbStorage) GetQueryAnalyticsCredential(ctx context.Context, clusterID i
 		select extensions.pgp_sym_decrypt(password_ciphertext, $2)
 		from query_analytics_credentials where cluster_id = $1`, clusterID, encryptionKey)
 }
+
+func (s *dbStorage) SetQueryAnalyticsDesired(ctx context.Context, clusterID int64, managed, desired bool) error {
+	_, err := s.db.Exec(ctx, `update clusters
+		set query_analytics_managed = $2, query_analytics_desired = $3
+		where cluster_id = $1`, clusterID, managed, desired)
+	return err
+}

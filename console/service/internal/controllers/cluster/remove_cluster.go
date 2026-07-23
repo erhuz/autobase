@@ -76,7 +76,7 @@ func (h *removeClusterHandler) Handle(param cluster.PostClustersIDRemoveParams) 
 	if len(clusterInfo.Inventory) != 0 {
 		envs = append(envs, "ANSIBLE_INVENTORY_JSON="+base64.StdEncoding.EncodeToString(clusterInfo.Inventory))
 	}
-	localLog.Trace().Strs("envs", envs).Msg("got envs")
+	localLog.Trace().Msg("got automation environment")
 
 	// Marshal extra vars map to JSON string for docker
 	extraVarsJSON, err := json.Marshal(extraVarsMap)

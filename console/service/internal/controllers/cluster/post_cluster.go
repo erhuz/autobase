@@ -67,7 +67,7 @@ func (h *postClusterHandler) Handle(param cluster.PostClustersParams) middleware
 			return cluster.NewPostClustersBadRequest().WithPayload(controllers.MakeErrorPayload(fmt.Errorf("failed to get secret: %s", err.Error()), controllers.BaseError))
 		}
 		secretID = &param.Body.AuthInfo.SecretID
-		localLog.Trace().Strs("secretEnvs", secretEnvs).Msg("got secret")
+		localLog.Trace().Msg("got secret")
 	} else {
 		localLog.Debug().Msg("AuthInfo is nil, secret is expected in envs from web")
 	}

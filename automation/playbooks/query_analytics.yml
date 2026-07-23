@@ -1,0 +1,339 @@
+---
+- name: Query analytics | Preflight and configure
+  hosts: postgres_cluster
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Define bind address
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.bind_address
+
+    - name: Validate guarded inputs
+      ansible.builtin.assert:
+        that:
+          - query_analytics_state in ['enabled', 'disabled']
+          - postgresql_version | int >= 14
+          - postgresql_version | int <= 18
+          - groups.get('postgres_cluster', []) | length >= 3
+          - query_analytics_monitor_username is match('^[a-z_][a-z0-9_]{0,62}$')
+          - query_analytics_state == 'disabled' or query_analytics_monitor_password | default('') | length >= 24
+          - query_analytics_state == 'disabled' or query_analytics_collector_cidrs | default([]) | length > 0
+
+    - name: Read Patroni cluster topology
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/cluster
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: query_analytics_topology
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Require a healthy three-node Patroni topology
+      ansible.builtin.assert:
+        that:
+          - query_analytics_topology.status | default(0) == 200
+          - query_analytics_topology.json.members | default([]) | length >= 3
+          - query_analytics_topology.json.members | default([]) | selectattr('role', 'equalto', 'leader') | list | length == 1
+          - query_analytics_topology.json.members | default([]) | selectattr('state', 'match', '^(running|streaming)$') | list | length >= 3
+      when: inventory_hostname == groups['postgres_cluster'][0]
+
+    - name: Get current Patroni passwords
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.pre_checks
+        tasks_from: passwords
+      vars:
+        source_group: postgres_cluster
+        postgresql_cluster_maintenance: true
+
+    - name: Read Patroni DCS configuration
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/config
+        user: "{{ patroni_restapi_username | default(omit) }}"
+        password: "{{ patroni_restapi_password | default(omit) }}"
+        force_basic_auth: "{{ patroni_restapi_username | default('') | length > 0 }}"
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: query_analytics_dcs
+      no_log: true
+      when: inventory_hostname == groups['postgres_cluster'][0]
+
+    - name: Require preservable Patroni configuration
+      ansible.builtin.assert:
+        that:
+          - query_analytics_dcs.json.postgresql.pg_hba is defined
+          - query_analytics_dcs.json.postgresql.pg_hba | length > 0
+          - query_analytics_dcs.json.postgresql.parameters.shared_preload_libraries is defined
+        fail_msg: Cannot safely preserve pg_hba and shared_preload_libraries from Patroni DCS.
+      when: inventory_hostname == groups['postgres_cluster'][0]
+
+    - name: Build preserved query analytics configuration
+      ansible.builtin.set_fact:
+        query_analytics_preload: >-
+          {{
+            (
+              (query_analytics_dcs.json.postgresql.parameters.shared_preload_libraries | default('')).split(',')
+              | map('trim') | reject('equalto', '') | reject('equalto', 'pg_stat_monitor') | list
+              + (['pg_stat_monitor'] if query_analytics_state == 'enabled' else [])
+            ) | join(',')
+          }}
+        query_analytics_hba: >-
+          {{ query_analytics_dcs.json.postgresql.pg_hba | default([])
+             | reject('search', query_analytics_monitor_username) | list }}
+      when: inventory_hostname == groups['postgres_cluster'][0]
+
+    - name: Add scoped collector HBA entries
+      ansible.builtin.set_fact:
+        query_analytics_hba: >-
+          {{ query_analytics_hba + ['host postgres ' ~ query_analytics_monitor_username ~ ' ' ~ item ~ ' scram-sha-256'] }}
+      loop: "{{ query_analytics_collector_cidrs | default([]) }}"
+      when:
+        - inventory_hostname == groups['postgres_cluster'][0]
+        - query_analytics_state == 'enabled'
+
+    - name: Deny monitoring role access outside scoped entries
+      ansible.builtin.set_fact:
+        query_analytics_hba: >-
+          {{ query_analytics_hba
+             + ['host all ' ~ query_analytics_monitor_username ~ ' 0.0.0.0/0 reject']
+             + ['host all ' ~ query_analytics_monitor_username ~ ' ::/0 reject'] }}
+      when:
+        - inventory_hostname == groups['postgres_cluster'][0]
+        - query_analytics_state == 'enabled'
+
+    - name: Add signed Percona repository
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.add_repository
+        tasks_from: extensions
+      when: query_analytics_state == 'enabled'
+
+    - name: Install pg_stat_monitor package
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.packages
+        tasks_from: extensions
+      when: query_analytics_state == 'enabled'
+
+    - name: Apply preserved preload, privacy settings, and HBA
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/config
+        method: PATCH
+        user: "{{ patroni_restapi_username | default(omit) }}"
+        password: "{{ patroni_restapi_password | default(omit) }}"
+        force_basic_auth: "{{ patroni_restapi_username | default('') | length > 0 }}"
+        body_format: json
+        body:
+          postgresql:
+            pg_hba: "{{ query_analytics_hba }}"
+            parameters:
+              shared_preload_libraries: "{{ query_analytics_preload }}"
+              pg_stat_monitor.pgsm_max: "{{ 256 if query_analytics_state == 'enabled' else none }}"
+              pg_stat_monitor.pgsm_max_buckets: "{{ 10 if query_analytics_state == 'enabled' else none }}"
+              pg_stat_monitor.pgsm_bucket_time: "{{ 60 if query_analytics_state == 'enabled' else none }}"
+              pg_stat_monitor.pgsm_query_max_len: "{{ 2048 if query_analytics_state == 'enabled' else none }}"
+              pg_stat_monitor.pgsm_normalized_query: "{{ 'on' if query_analytics_state == 'enabled' else none }}"
+              pg_stat_monitor.pgsm_track_application_names: "{{ 'on' if query_analytics_state == 'enabled' else none }}"
+              pg_stat_monitor.pgsm_enable_pgsm_query_id: "{{ 'on' if query_analytics_state == 'enabled' else none }}"
+              pg_stat_monitor.pgsm_track_utility: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
+              pg_stat_monitor.pgsm_track_planning: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
+              pg_stat_monitor.pgsm_extract_comments: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
+              pg_stat_monitor.pgsm_enable_query_plan: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      no_log: true
+      when: inventory_hostname == groups['postgres_cluster'][0]
+
+- name: Query analytics | Remove database objects before disable
+  hosts: postgres_cluster
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Detect current leader
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/leader
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: query_analytics_leader
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Drop pg_stat_monitor extension
+      become_user: postgres
+      community.postgresql.postgresql_ext:
+        name: pg_stat_monitor
+        login_db: postgres
+        state: absent
+      when:
+        - query_analytics_state == 'disabled'
+        - query_analytics_leader.status | default(0) == 200
+
+    - name: Drop query analytics monitoring role
+      become_user: postgres
+      community.postgresql.postgresql_user:
+        name: "{{ query_analytics_monitor_username }}"
+        login_db: postgres
+        state: absent
+      no_log: true
+      when:
+        - query_analytics_state == 'disabled'
+        - query_analytics_leader.status | default(0) == 200
+
+- name: Query analytics | Serial HA restart
+  ansible.builtin.import_playbook: restart_pgcluster.yml
+
+- name: Query analytics | Create objects and verify
+  hosts: postgres_cluster
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Detect current leader after controlled switchover
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/leader
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: query_analytics_current_leader
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Create restricted monitoring role
+      become_user: postgres
+      community.postgresql.postgresql_user:
+        name: "{{ query_analytics_monitor_username }}"
+        password: "{{ query_analytics_monitor_password }}"
+        role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE,NOREPLICATION
+        conn_limit: 5
+        login_db: postgres
+        state: present
+      no_log: true
+      when:
+        - query_analytics_state == 'enabled'
+        - query_analytics_current_leader.status | default(0) == 200
+
+    - name: Grant read statistics only
+      become_user: postgres
+      community.postgresql.postgresql_membership:
+        group: pg_read_all_stats
+        target_role: "{{ query_analytics_monitor_username }}"
+        login_db: postgres
+        state: present
+      no_log: true
+      when:
+        - query_analytics_state == 'enabled'
+        - query_analytics_current_leader.status | default(0) == 200
+
+    - name: Apply monitoring role safety limits
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_db: postgres
+        query:
+          - >-
+            ALTER ROLE "{{ query_analytics_monitor_username }}"
+            SET default_transaction_read_only = on
+          - >-
+            ALTER ROLE "{{ query_analytics_monitor_username }}"
+            SET statement_timeout = '5s'
+      no_log: true
+      when:
+        - query_analytics_state == 'enabled'
+        - query_analytics_current_leader.status | default(0) == 200
+
+    - name: Create exact pg_stat_monitor extension version
+      become_user: postgres
+      community.postgresql.postgresql_ext:
+        name: pg_stat_monitor
+        version: "{{ pg_stat_monitor_version | default('2.3.2') }}"
+        login_db: postgres
+        state: present
+      when:
+        - query_analytics_state == 'enabled'
+        - query_analytics_current_leader.status | default(0) == 200
+
+    - name: Verify extension, preload, and privacy settings on every node
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -Atqc
+          - >-
+            select coalesce((select extversion from pg_extension where extname='pg_stat_monitor'),'absent') || '|'
+            || current_setting('shared_preload_libraries') || '|'
+            || coalesce(current_setting('pg_stat_monitor.pgsm_normalized_query',true),'') || '|'
+            || coalesce(current_setting('pg_stat_monitor.pgsm_enable_query_plan',true),'') || '|'
+            || coalesce(current_setting('pg_stat_monitor.pgsm_extract_comments',true),'')
+      register: query_analytics_verify
+      changed_when: false
+      when: query_analytics_state == 'enabled'
+
+    - name: Assert exact safe enabled state
+      ansible.builtin.assert:
+        that:
+          - query_analytics_verify.stdout.split('|')[0] == '2.3.2'
+          - query_analytics_verify.stdout.split('|')[1].split(',') | last | trim == 'pg_stat_monitor'
+          - query_analytics_verify.stdout.split('|')[2] == 'on'
+          - query_analytics_verify.stdout.split('|')[3] == 'off'
+          - query_analytics_verify.stdout.split('|')[4] == 'off'
+      when: query_analytics_state == 'enabled'
+
+    - name: Verify disabled state on every node
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -Atqc
+          - >-
+            select position('pg_stat_monitor' in current_setting('shared_preload_libraries')) = 0
+            and not exists(select 1 from pg_extension where extname='pg_stat_monitor')
+      register: query_analytics_disabled_verify
+      changed_when: false
+      when: query_analytics_state == 'disabled'
+
+    - name: Assert disabled state
+      ansible.builtin.assert:
+        that: query_analytics_disabled_verify.stdout == 't'
+      when: query_analytics_state == 'disabled'
+
+    - name: Verify final Patroni health
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/cluster
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: query_analytics_final_topology
+      changed_when: false
+      when: inventory_hostname == groups['postgres_cluster'][0]
+
+    - name: Assert final healthy HA topology
+      ansible.builtin.assert:
+        that:
+          - query_analytics_final_topology.json.members | default([]) | length >= 3
+          - query_analytics_final_topology.json.members | default([]) | selectattr('role', 'equalto', 'leader') | list | length == 1
+          - query_analytics_final_topology.json.members | default([]) | selectattr('state', 'match', '^(running|streaming)$') | list | length >= 3
+      when: inventory_hostname == groups['postgres_cluster'][0]

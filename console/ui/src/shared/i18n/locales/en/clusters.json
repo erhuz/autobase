@@ -166,6 +166,17 @@
   "queryPerformanceHistogram": "Latency distribution",
   "queryPerformanceBucket": "Bucket",
   "queryPerformanceNoData": "No completed query buckets in this time range.",
+  "queryPerformanceEnable": "Enable analytics",
+  "queryPerformanceDisable": "Disable analytics",
+  "queryPerformanceOperationPreflight": "Query analytics preflight",
+  "queryPerformanceAffectedNodes": "Affected nodes",
+  "queryPerformanceOperationPlan": "Operation plan",
+  "queryPerformanceConfirmation": "Confirmation phrase",
+  "queryPerformanceConfirmationHelp": "Type {{phrase}} to continue.",
+  "queryPerformanceStartOperation": "Start operation",
+  "queryPerformancePreflightError": "The operation preflight could not be created.",
+  "queryPerformanceOperationError": "The operation could not be started. Run a fresh preflight.",
+  "queryPerformanceOperationAccepted": "Operation #{{id}} was accepted.",
   "refresh": "Refresh",
   "retry": "Retry"
 }

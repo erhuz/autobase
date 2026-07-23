@@ -96,6 +96,7 @@ V46: Console Go verification runs `-mod=readonly`; committed `go.mod` + `go.sum`
 V47: checkout-safe Go gate targets committed packages; full service gate runs after Swagger generation.
 V48: query-performance filters have programmatic labels + keyboard-operable native controls.
 V49: query-performance refresh/filter change advances window end; stale window refetch ⊥.
+V50: operation `finished` timestamp ∃ iff status ∈ `succeeded,failed,cancelled`.
 
 ## §T
 
@@ -121,7 +122,7 @@ T18|x|add PGSM package/config/default-on bootstrap + contract tests|V33,V34,V35,
 T19|x|add analytics Console DB schema + migration/storage tests|V12,V13,V14,V40,V41,V42,V44,V45,V46,V47,I.db.query,I.release,I.verify
 T20|x|add all-node PGSM collector + query-performance APIs|V34,V39,V40,V41,V42,V43,V44,V45,I.api.query,I.db.query,I.verify
 T21|x|add query-performance UI + status/filter/trend/detail tests|V34,V42,V43,V44,V45,V48,V49,I.ui.query,I.api.query,I.verify
-T22|.|add guarded PGSM enable/disable preflight + serial HA operation|V4,V5,V19,V20,V21,V22,V24,V34,V36,V37,V38,V39,V40,V44,V45,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query,I.verify
+T22|x|add guarded PGSM enable/disable preflight + serial HA operation|V4,V5,V19,V20,V21,V22,V24,V34,V36,V37,V38,V39,V40,V44,V45,V50,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query,I.verify
 
 ## §B
 
@@ -147,3 +148,21 @@ B18|2026-07-22|query-performance filter labels were not programmatically associa
 B19|2026-07-22|full UI suite hit pre-existing jsdom `localStorage` failures in cluster transform tests|V45
 B20|2026-07-22|cluster overview invoked RTK query hook through callback; changed-surface lint failed|V45
 B21|2026-07-22|query-performance refresh reused initial time-window end and could return stale data|V49
+B22|2026-07-23|sandbox blocked writes to default Go module cache before guarded-operation tests ran|V47
+B23|2026-07-23|isolated Go cache retry required dependency downloads but sandbox denied DNS/network|V47
+B24|2026-07-23|Ansible gate used read-only default local temp path before playbook parsing|V45
+B25|2026-07-23|sandbox prevented Ansible local RPC worker startup before contract execution|V45
+B26|2026-07-23|guarded-rollout contract embedded backslash-escaped quotes invalid in YAML scalar|V45
+B27|2026-07-23|guarded-rollout contract expected a literal version line while playbook pins via default expression|V45
+B28|2026-07-23|standalone Ansible syntax gate could not resolve repo-local FQCN collection layout|V45
+B29|2026-07-23|guarded-operation UI test used global queries while prior renders persist in project Vitest setup|V45
+B30|2026-07-23|Testing Library render queries remained bound to document body, so prior test DOM still duplicated controls|V45
+B31|2026-07-23|shared switchover retry block ignored a second failure and could continue to leader restart|V24,V37
+B32|2026-07-23|operations list filtered by finished time, hiding queued/running rows with no final completion|V19,V20
+B33|2026-07-23|sandbox denied Docker socket access during disposable migration-container cleanup|V45
+B34|2026-07-23|Ansible 2.20 required regex assertion condition to remain an explicit string scalar|V45
+B35|2026-07-23|switchover role recheck status list was indented outside the URI module mapping|V45
+B36|2026-07-23|operation detail mapped running `updated_at` to terminal `finished`|V50
+B37|2026-07-23|verification used repo-root file paths from nested workdir; formatter never ran|V47
+B38|2026-07-23|isolated full-service gate assumed absent `/home/erhuz/go/bin/swagger`; generation never ran|V47
+B39|2026-07-23|isolated service copy omitted sibling `console/db`; migration contract fixture unresolved|V47

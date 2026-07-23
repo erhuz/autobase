@@ -30,6 +30,6 @@ func (h *getOperationLogHandler) Handle(param operation.GetOperationsIDLogParams
 	}
 
 	return operation.NewGetOperationsIDLogOK().WithPayload(logMessage).WithContentType("plain/text").WithXLogCompleted(func() bool {
-		return op.Status != storage.OperationStatusInProgress
+		return storage.IsTerminalOperationStatus(op.Status)
 	}())
 }

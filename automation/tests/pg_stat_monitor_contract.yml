@@ -57,3 +57,36 @@
         package_tasks: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/packages/tasks/extensions.yml') }}"
         repository_tasks: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/add_repository/tasks/extensions.yml') }}"
         database_object_tasks: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/pre_checks/tasks/passwords.yml') }}"
+
+    - name: Check guarded HA rollout contract
+      ansible.builtin.assert:
+        that:
+          - guarded_cluster_count in operation_playbook
+          - guarded_states in operation_playbook
+          - normalized_setting in operation_playbook
+          - plan_setting in operation_playbook
+          - comment_setting in operation_playbook
+          - exact_version in operation_playbook
+          - restart_import in operation_playbook
+          - serial_restart in restart_playbook
+          - switchover in restart_playbook
+          - redaction in operation_playbook
+          - preserved_hba in operation_playbook
+          - safe_role_recheck in switchover_tasks
+          - "switchover_tasks | regex_findall('ignore_errors: true') | length == 1"
+      vars:
+        operation_playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/query_analytics.yml') }}"
+        restart_playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/restart_pgcluster.yml') }}"
+        switchover_tasks: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/update/tasks/switchover.yml') }}"
+        guarded_cluster_count: "groups.get('postgres_cluster', []) | length >= 3"
+        guarded_states: "query_analytics_state in ['enabled', 'disabled']"
+        normalized_setting: pg_stat_monitor.pgsm_normalized_query
+        plan_setting: pg_stat_monitor.pgsm_enable_query_plan
+        comment_setting: pg_stat_monitor.pgsm_extract_comments
+        exact_version: "pg_stat_monitor_version | default('2.3.2')"
+        restart_import: "import_playbook: restart_pgcluster.yml"
+        serial_restart: "serial: 1"
+        switchover: "tasks_from: switchover"
+        redaction: "no_log: true"
+        preserved_hba: "Cannot safely preserve pg_hba and shared_preload_libraries"
+        safe_role_recheck: "status_code: [200, 503]"

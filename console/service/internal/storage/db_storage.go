@@ -513,13 +513,50 @@ func (s *dbStorage) GetDefaultClusterName(ctx context.Context) (string, error) {
 }
 
 func (s *dbStorage) CreateOperation(ctx context.Context, req *CreateOperationReq) (*Operation, error) {
-	operation, err := QueryRowToStruct[Operation](ctx, s.db, `insert into operations(project_id, cluster_id, docker_code, operation_type, operation_status, cid)
-			values($1, $2, $3, $4, $5, $6) returning *`, req.ProjectID, req.ClusterID, req.DockerCode, req.Type, OperationStatusInProgress, req.Cid)
+	operation, err := s.ReserveOperation(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+	return s.UpdateOperation(ctx, &UpdateOperationReq{ID: operation.ID, DockerCode: &req.DockerCode, Status: func() *string { v := OperationStatusRunning; return &v }()})
+}
 
-	return operation, nil
+func (s *dbStorage) ReserveOperation(ctx context.Context, req *CreateOperationReq) (*Operation, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	var active int
+	err = tx.QueryRow(ctx, `select 1 from operations
+		where cluster_id = $1 and operation_status in ($2,$3) limit 1 for update`,
+		req.ClusterID, OperationStatusQueued, OperationStatusRunning).Scan(&active)
+	if err == nil {
+		return nil, errors.New("another cluster mutation is active")
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `insert into operations(
+		project_id, cluster_id, docker_code, operation_type, operation_status, cid,
+		actor, sanitized_params, preflight_snapshot, plan, affected_nodes)
+		values($1,$2,'',$3,$4,$5,coalesce(nullif($6,''),'api-token'),
+			coalesce($7::jsonb,'{}'),coalesce($8::jsonb,'{}'),coalesce($9::jsonb,'[]'),coalesce($10::jsonb,'[]')) returning *`,
+		req.ProjectID, req.ClusterID, req.Type, OperationStatusQueued, req.Cid,
+		req.Actor, req.SanitizedParams, req.PreflightSnapshot, req.Plan, req.AffectedNodes)
+	if err != nil {
+		return nil, err
+	}
+	operation, err := pgx.CollectOneRow(rows, pgx.RowToStructByPos[Operation])
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tx.Exec(ctx, `insert into cluster_operation_locks(cluster_id, operation_id) values($1,$2)`, req.ClusterID, operation.ID); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return &operation, nil
 }
 
 func (s *dbStorage) GetClusterByName(ctx context.Context, name string) (*Cluster, error) {
@@ -670,8 +707,8 @@ func (s *dbStorage) DeleteServer(ctx context.Context, id int64) error {
 }
 
 func (s *dbStorage) GetInProgressOperations(ctx context.Context, from time.Time) ([]Operation, error) {
-	operations, err := QueryRowsToStruct[Operation](ctx, s.db, "select * from operations where operation_status = $1 and created_at > $2",
-		OperationStatusInProgress, from)
+	operations, err := QueryRowsToStruct[Operation](ctx, s.db, "select * from operations where operation_status = $1 and created_at > $2 and docker_code <> ''",
+		OperationStatusRunning, from)
 	if err != nil {
 		return nil, err
 	}
@@ -683,14 +720,43 @@ func (s *dbStorage) UpdateOperation(ctx context.Context, req *UpdateOperationReq
 	operation, err := QueryRowToStruct[Operation](ctx, s.db,
 		`update operations
 		set operation_status = coalesce($1, operation_status),
-		    operation_log = case when $2::text is null then operation_log else concat(operation_log, CHR(10), $2::text) end
-		where id = $3 returning id, project_id, cluster_id, docker_code, cid, operation_type, operation_status, null, created_at, updated_at`,
-		req.Status, req.Logs, req.ID)
+		    operation_log = case when $2::text is null then operation_log else concat(operation_log, CHR(10), $2::text) end,
+		    docker_code = coalesce($3, docker_code),
+		    final_verification = case when $4::jsonb is null then final_verification else $4::jsonb end,
+		    safe_next_action = coalesce($5, safe_next_action)
+		where id = $6 returning *`,
+		req.Status, req.Logs, req.DockerCode, req.FinalVerification, req.SafeNextAction, req.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	return operation, nil
+}
+
+func (s *dbStorage) HasActiveOperation(ctx context.Context, clusterID int64) (bool, error) {
+	return QueryRowToScalar[bool](ctx, s.db, `select
+		exists(select 1 from cluster_operation_locks where cluster_id = $1)
+		or exists(select 1 from operations where cluster_id = $1 and operation_status in ($2,$3))`,
+		clusterID, OperationStatusQueued, OperationStatusRunning)
+}
+
+func (s *dbStorage) CreateOperationPreflight(ctx context.Context, req *CreateOperationPreflightReq) (*OperationPreflight, error) {
+	return QueryRowToStruct[OperationPreflight](ctx, s.db, `insert into operation_preflights(
+		cluster_id, operation_type, observed, desired, checks, blockers, plan, affected_nodes,
+		confirmation, topology_hash, expires_at)
+		values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *`,
+		req.ClusterID, req.Type, req.Observed, req.Desired, req.Checks, req.Blockers,
+		req.Plan, req.AffectedNodes, req.Confirmation, req.TopologyHash, req.ExpiresAt)
+}
+
+func (s *dbStorage) GetOperationPreflight(ctx context.Context, id int64) (*OperationPreflight, error) {
+	return QueryRowToStruct[OperationPreflight](ctx, s.db, `select * from operation_preflights where id = $1`, id)
+}
+
+func (s *dbStorage) ConsumeOperationPreflight(ctx context.Context, id int64) (bool, error) {
+	command, err := s.db.Exec(ctx, `update operation_preflights set consumed_at = current_timestamp
+		where id = $1 and consumed_at is null and expires_at > current_timestamp`, id)
+	return command.RowsAffected() == 1, err
 }
 
 func (s *dbStorage) GetOperations(ctx context.Context, req *GetOperationsReq) ([]OperationView, *MetaPagination, error) {
@@ -705,7 +771,7 @@ func (s *dbStorage) GetOperations(ctx context.Context, req *GetOperationsReq) ([
 		curOffset = *req.Offset
 	}
 
-	subQuery := `where project_id = $1 and started >= $2 and finished <= $3`
+	subQuery := `where project_id = $1 and started >= $2 and started <= $3`
 
 	var (
 		extraWhere           string

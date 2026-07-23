@@ -6,11 +6,18 @@ const (
 	InstanceTypeMedium = "Medium Size"
 	InstanceTypeLarge  = "Large Size"
 
-	OperationStatusInProgress = "in_progress"
-	OperationStatusSuccess    = "success"
-	OperationStatusFailed     = "failed"
+	OperationStatusQueued    = "queued"
+	OperationStatusRunning   = "running"
+	OperationStatusSucceeded = "succeeded"
+	OperationStatusFailed    = "failed"
+	OperationStatusCancelled = "cancelled"
 
-	OperationTypeDeploy = "deploy"
+	OperationStatusInProgress = OperationStatusRunning
+	OperationStatusSuccess    = OperationStatusSucceeded
+
+	OperationTypeDeploy                = "deploy"
+	OperationTypeQueryAnalyticsEnable  = "query_analytics_enable"
+	OperationTypeQueryAnalyticsDisable = "query_analytics_disable"
 
 	ClusterStatusFailed      = "failed"
 	ClusterStatusHealthy     = "healthy"
@@ -19,6 +26,10 @@ const (
 	ClusterStatusReady       = "ready"
 	ClusterStatusUnavailable = "unavailable"
 )
+
+func IsTerminalOperationStatus(status string) bool {
+	return status == OperationStatusSucceeded || status == OperationStatusFailed || status == OperationStatusCancelled
+}
 
 var (
 	secretSortFields = map[string]string{

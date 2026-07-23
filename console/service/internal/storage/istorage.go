@@ -54,10 +54,15 @@ type IStorage interface {
 
 	// operation
 	CreateOperation(ctx context.Context, req *CreateOperationReq) (*Operation, error)
+	ReserveOperation(ctx context.Context, req *CreateOperationReq) (*Operation, error)
 	GetOperations(ctx context.Context, req *GetOperationsReq) ([]OperationView, *MetaPagination, error)
 	GetOperation(ctx context.Context, id int64) (*Operation, error)
 	UpdateOperation(ctx context.Context, req *UpdateOperationReq) (*Operation, error)
 	GetInProgressOperations(ctx context.Context, from time.Time) ([]Operation, error)
+	HasActiveOperation(ctx context.Context, clusterID int64) (bool, error)
+	CreateOperationPreflight(ctx context.Context, req *CreateOperationPreflightReq) (*OperationPreflight, error)
+	GetOperationPreflight(ctx context.Context, id int64) (*OperationPreflight, error)
+	ConsumeOperationPreflight(ctx context.Context, id int64) (bool, error)
 
 	// server
 	CreateServer(ctx context.Context, req *CreateServerReq) (*Server, error)
@@ -72,6 +77,7 @@ type IStorage interface {
 	PurgeQueryAnalyticsBefore(ctx context.Context, before time.Time) (int64, error)
 	SetQueryAnalyticsCredential(ctx context.Context, clusterID int64, password, encryptionKey string) error
 	GetQueryAnalyticsCredential(ctx context.Context, clusterID int64, encryptionKey string) (string, error)
+	SetQueryAnalyticsDesired(ctx context.Context, clusterID int64, managed, desired bool) error
 	GetQueryAnalyticsOverview(ctx context.Context, clusterID int64, filter *QueryAnalyticsFilter) (*QueryAnalyticsOverview, error)
 	GetQueryAnalyticsDetail(ctx context.Context, clusterID int64, fingerprintID string, filter *QueryAnalyticsFilter) (*QueryAnalyticsDetail, error)
 }

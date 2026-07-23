@@ -7,6 +7,7 @@ type ManageClusterConfig struct {
 	Envs      []string
 	ExtraVars string // JSON string
 	Mounts    []Mount
+	Playbook  string
 }
 
 type Mount struct {

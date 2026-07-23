@@ -55,6 +55,24 @@ const injectedRtkApi = api.injectEndpoints({
         params: queryPerformanceParams(queryArg),
       }),
     }),
+    postClustersByIdPreflights: build.mutation<PostClustersByIdPreflightsApiResponse, PostClustersByIdPreflightsApiArg>(
+      {
+        query: (queryArg) => ({
+          url: `/clusters/${queryArg.id}/preflights`,
+          method: 'POST',
+          body: queryArg.requestOperationPreflight,
+        }),
+      },
+    ),
+    postClustersByIdOperations: build.mutation<PostClustersByIdOperationsApiResponse, PostClustersByIdOperationsApiArg>(
+      {
+        query: (queryArg) => ({
+          url: `/clusters/${queryArg.id}/operations`,
+          method: 'POST',
+          body: queryArg.requestOperationStart,
+        }),
+      },
+    ),
     deleteClustersById: build.mutation<DeleteClustersByIdApiResponse, DeleteClustersByIdApiArg>({
       query: (queryArg) => ({ url: `/clusters/${queryArg.id}`, method: 'DELETE' }),
       invalidatesTags: () => [{ type: 'Clusters', id: 'LIST' }],
@@ -176,6 +194,10 @@ export type GetClustersByIdQueryPerformanceFingerprintIdApiResponse = ResponseQu
 export type GetClustersByIdQueryPerformanceFingerprintIdApiArg = QueryPerformanceApiArg & {
   fingerprintId: string;
 };
+export type PostClustersByIdPreflightsApiResponse = ResponseOperationPreflight;
+export type PostClustersByIdPreflightsApiArg = { id: number; requestOperationPreflight: RequestOperationPreflight };
+export type PostClustersByIdOperationsApiResponse = ResponseOperationStart;
+export type PostClustersByIdOperationsApiArg = { id: number; requestOperationStart: RequestOperationStart };
 export type DeleteClustersByIdApiResponse = /** status 204 OK */ void;
 export type DeleteClustersByIdApiArg = {
   id: number;
@@ -302,6 +324,24 @@ export type ResponseQueryPerformanceDetail = {
   series?: QueryPerformancePoint[];
   histogram?: number[];
 };
+export type RequestOperationPreflight = {
+  type: 'query_analytics_enable' | 'query_analytics_disable';
+};
+export type RequestOperationStart = { preflight_id: number; confirmation: string };
+export type ResponsePreflightCheck = { name?: string; ok?: boolean };
+export type ResponseOperationPreflight = {
+  id?: number;
+  type?: string;
+  observed?: object;
+  desired?: object;
+  checks?: ResponsePreflightCheck[];
+  blockers?: string[];
+  plan?: string[];
+  affected_nodes?: string[];
+  confirmation?: string;
+  expires_at?: string;
+};
+export type ResponseOperationStart = { operation_id?: number; status?: string };
 export type ClusterInfoInstance = {
   id?: number;
   name?: string;
@@ -358,6 +398,8 @@ export const {
   useLazyGetClustersByIdQueryPerformanceQuery,
   useGetClustersByIdQueryPerformanceFingerprintIdQuery,
   useLazyGetClustersByIdQueryPerformanceFingerprintIdQuery,
+  usePostClustersByIdPreflightsMutation,
+  usePostClustersByIdOperationsMutation,
   useDeleteClustersByIdMutation,
   usePostClustersByIdRefreshMutation,
   usePostClustersByIdReinitMutation,

@@ -127,7 +127,7 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 	fLog, err := os.Open(fileLog)
 	if err != nil {
 		reason := fmt.Sprintf("can't open log file %q", fileLog)
-		lw.markClusterStatusFailed(ctx, op.ID, op.ClusterID, log, err, reason)
+		lw.markClusterStatusFailed(ctx, op, log, err, reason)
 
 		return
 	}
@@ -136,7 +136,7 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 	jsonDec := json.NewDecoder(fLog)
 	err = jsonDec.Decode(&logs)
 	if err != nil {
-		lw.markClusterStatusFailed(ctx, op.ID, op.ClusterID, log, err, "failed to decode log file's JSON")
+		lw.markClusterStatusFailed(ctx, op, log, err, "failed to decode log file's JSON")
 
 		return
 	}
@@ -184,14 +184,34 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 
 		status = storage.OperationStatusFailed
 	}
+	if status == "success" {
+		status = storage.OperationStatusSucceeded
+	} else if status != storage.OperationStatusFailed {
+		status = storage.OperationStatusFailed
+	}
+	verification, _ := json.Marshal(map[string]any{"automation_summary": true, "verified": status == storage.OperationStatusSucceeded})
+	var next *string
+	if status == storage.OperationStatusFailed {
+		value := "Review the operation log, restore node health if needed, then run a fresh preflight."
+		next = &value
+	}
 	updatedOperation, err := lw.db.UpdateOperation(ctx, &storage.UpdateOperationReq{
-		ID:     op.ID,
-		Status: &status,
+		ID: op.ID, Status: &status, FinalVerification: verification, SafeNextAction: next,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update operation status in db")
 	} else {
 		log.Trace().Any("operation", updatedOperation).Msg("operation was updated in db")
+	}
+
+	if isQueryAnalyticsOperation(op.Type) {
+		if status == storage.OperationStatusSucceeded {
+			desired := op.Type == storage.OperationTypeQueryAnalyticsEnable
+			if err = lw.db.SetQueryAnalyticsDesired(ctx, op.ClusterID, true, desired); err != nil {
+				log.Error().Err(err).Msg("failed to store query analytics desired state")
+			}
+		}
+		return
 	}
 
 	// set cluster status
@@ -216,22 +236,29 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 	}
 }
 
-func (lw *logWatcher) markClusterStatusFailed(ctx context.Context, opID, clusterID int64, log zerolog.Logger, err error, reason string) {
+func (lw *logWatcher) markClusterStatusFailed(ctx context.Context, op *storage.Operation, log zerolog.Logger, err error, reason string) {
 	log.Error().Err(err).Msg(reason)
 
 	status := storage.OperationStatusFailed
+	next := "Restore automation logging, then run a fresh preflight."
 	if _, err = lw.db.UpdateOperation(ctx, &storage.UpdateOperationReq{
-		ID:     opID,
-		Status: &status,
+		ID: op.ID, Status: &status, FinalVerification: []byte(`{"automation_summary":false,"verified":false}`), SafeNextAction: &next,
 	}); err != nil {
 		log.Error().Err(err).Msg("failed to update operation status in db")
 	}
 
+	if isQueryAnalyticsOperation(op.Type) {
+		return
+	}
 	status = storage.ClusterStatusFailed
 	if _, err = lw.db.UpdateCluster(ctx, &storage.UpdateClusterReq{
-		ID:     clusterID,
+		ID:     op.ClusterID,
 		Status: &status,
 	}); err != nil {
 		log.Error().Err(err).Msg("failed to update cluster status in db")
 	}
+}
+
+func isQueryAnalyticsOperation(operationType string) bool {
+	return operationType == storage.OperationTypeQueryAnalyticsEnable || operationType == storage.OperationTypeQueryAnalyticsDisable
 }

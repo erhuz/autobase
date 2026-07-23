@@ -491,6 +491,56 @@ paths:
           schema:
             $ref: "#/definitions/Response.Error"
 
+  /clusters/{id}/preflights:
+    post:
+      summary: "Preflight a guarded cluster operation"
+      tags:
+        - cluster
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/Request.OperationPreflight'
+      responses:
+        '201':
+          description: Created
+          schema:
+            $ref: '#/definitions/Response.OperationPreflight'
+        '400':
+          description: Error
+          schema:
+            $ref: '#/definitions/Response.Error'
+
+  /clusters/{id}/operations:
+    post:
+      summary: "Launch a confirmed guarded cluster operation"
+      tags:
+        - cluster
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/Request.OperationStart'
+      responses:
+        '202':
+          description: Accepted
+          schema:
+            $ref: '#/definitions/Response.OperationStart'
+        '400':
+          description: Error
+          schema:
+            $ref: '#/definitions/Response.Error'
+
   /servers/{id}:
     delete:
       summary: "Delete server (from the console database)"
@@ -986,7 +1036,137 @@ paths:
           schema:
             $ref: "#/definitions/Response.Error"
 
+  /operations/{id}:
+    get:
+      summary: "Get operation audit record"
+      tags:
+        - operation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/Response.OperationDetail'
+        '400':
+          description: Error
+          schema:
+            $ref: '#/definitions/Response.Error'
+
 definitions:
+
+  Request.OperationPreflight:
+    type: object
+    required: [type]
+    properties:
+      type:
+        type: string
+        enum: [query_analytics_enable, query_analytics_disable]
+
+  Request.OperationStart:
+    type: object
+    required: [preflight_id, confirmation]
+    properties:
+      preflight_id:
+        type: integer
+      confirmation:
+        type: string
+
+  Response.OperationPreflight:
+    type: object
+    properties:
+      id:
+        type: integer
+      type:
+        type: string
+      observed:
+        type: object
+        additionalProperties: true
+      desired:
+        type: object
+        additionalProperties: true
+      checks:
+        type: array
+        items:
+          $ref: '#/definitions/Response.PreflightCheck'
+      blockers:
+        type: array
+        items:
+          type: string
+      plan:
+        type: array
+        items:
+          type: string
+      affected_nodes:
+        type: array
+        items:
+          type: string
+      confirmation:
+        type: string
+      expires_at:
+        type: string
+        format: date-time
+
+  Response.PreflightCheck:
+    type: object
+    properties:
+      name:
+        type: string
+      ok:
+        type: boolean
+
+  Response.OperationStart:
+    type: object
+    properties:
+      operation_id:
+        type: integer
+      status:
+        type: string
+
+  Response.OperationDetail:
+    type: object
+    properties:
+      id:
+        type: integer
+      cluster_id:
+        type: integer
+      type:
+        type: string
+      status:
+        type: string
+      actor:
+        type: string
+      sanitized_params:
+        type: object
+        additionalProperties: true
+      preflight_snapshot:
+        type: object
+        additionalProperties: true
+      plan:
+        type: array
+        items:
+          type: string
+      affected_nodes:
+        type: array
+        items:
+          type: string
+      final_verification:
+        type: object
+        additionalProperties: true
+      safe_next_action:
+        type: string
+        x-nullable: true
+      started:
+        type: string
+        format: date-time
+      finished:
+        type: string
+        format: date-time
+        x-nullable: true
+
   Response.Version:
     title: Version response
     type: object

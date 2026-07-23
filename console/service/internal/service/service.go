@@ -15,6 +15,7 @@ import (
 	"postgresql-cluster-console/models"
 	"postgresql-cluster-console/restapi"
 	"postgresql-cluster-console/restapi/operations"
+	clusterapi "postgresql-cluster-console/restapi/operations/cluster"
 	"postgresql-cluster-console/restapi/operations/system"
 
 	"github.com/go-openapi/runtime/middleware"
@@ -98,11 +99,15 @@ func NewService(
 	api.ClusterPostClustersHandler = cluster.NewPostClusterHandler(db, dockerManager, logCollector, cfg, log.Logger)
 	api.ClusterDeleteClustersIDHandler = cluster.NewDeleteClusterHandler(db)
 	api.OperationGetOperationsHandler = operation.NewGetOperationsHandler(db)
+	api.OperationGetOperationsIDHandler = operation.NewGetOperationHandler(db)
 	api.OperationGetOperationsIDLogHandler = operation.NewGetOperationLogHandler(db)
 	api.ClusterGetClustersHandler = cluster.NewGetClustersHandler(db, log.Logger)
 	api.ClusterGetClustersIDHandler = cluster.NewGetClusterHandler(db, log.Logger)
 	api.ClusterGetClustersIDQueryPerformanceHandler = cluster.NewGetQueryPerformanceHandler(db)
 	api.ClusterGetClustersIDQueryPerformanceFingerprintIDHandler = cluster.NewGetQueryPerformanceDetailHandler(db)
+	queryOperations := cluster.NewQueryAnalyticsOperationsHandler(db, dockerManager, logCollector, clusterWatcher, cfg, log.Logger)
+	api.ClusterPostClustersIDPreflightsHandler = clusterapi.PostClustersIDPreflightsHandlerFunc(queryOperations.HandlePreflight)
+	api.ClusterPostClustersIDOperationsHandler = clusterapi.PostClustersIDOperationsHandlerFunc(queryOperations.HandleOperation)
 	api.ClusterGetClustersDefaultNameHandler = cluster.NewGetClusterDefaultNameHandler(db, log.Logger)
 	api.ClusterPostClustersIDRemoveHandler = cluster.NewRemoveClusterHandler(db, dockerManager, logCollector, cfg, log.Logger)
 	api.ClusterDeleteServersIDHandler = cluster.NewDeleteServerHandler(db, log.Logger)

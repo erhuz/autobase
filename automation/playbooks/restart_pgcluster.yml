@@ -71,7 +71,6 @@
         groups: primary
         postgresql_exists: true
       when:
-        - groups.get('primary', []) | length < 1
         - hostvars[item]['leader_result']['status'] | default(0) == 200
       loop: "{{ groups['postgres_cluster'] }}"
       changed_when: false
@@ -83,7 +82,6 @@
         groups: secondary
         postgresql_exists: true
       when:
-        - groups.get('secondary', []) | length < 1
         - hostvars[item]['leader_result']['status'] | default(0) == 503
       loop: "{{ groups['postgres_cluster'] }}"
       changed_when: false

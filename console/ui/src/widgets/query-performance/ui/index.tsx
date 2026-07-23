@@ -5,6 +5,10 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   Grid,
   InputLabel,
@@ -19,6 +23,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -28,8 +33,11 @@ import {
   QueryPerformancePoint,
   QueryPerformanceQuery,
   QueryPerformanceStatus,
+  ResponseOperationPreflight,
   useGetClustersByIdQueryPerformanceQuery,
   useLazyGetClustersByIdQueryPerformanceFingerprintIdQuery,
+  usePostClustersByIdOperationsMutation,
+  usePostClustersByIdPreflightsMutation,
 } from '@shared/api/api/clusters.ts';
 
 type QueryPerformanceProps = { clusterId: number };
@@ -185,12 +193,18 @@ const QueryPerformance: FC<QueryPerformanceProps> = ({ clusterId }) => {
   const [selection, setSelection] = useState<QueryPerformanceSelection>({ rangeHours: 1 });
   const [windowEnd, setWindowEnd] = useState(Date.now());
   const [selectedFingerprint, setSelectedFingerprint] = useState<string>();
+  const [preflight, setPreflight] = useState<ResponseOperationPreflight>();
+  const [confirmation, setConfirmation] = useState('');
+  const [operationError, setOperationError] = useState('');
+  const [acceptedOperation, setAcceptedOperation] = useState<number>();
   const args = useMemo(
     () => buildQueryPerformanceArgs(clusterId, selection, windowEnd),
     [clusterId, selection, windowEnd],
   );
   const overview = useGetClustersByIdQueryPerformanceQuery(args, { skip: !Number.isFinite(clusterId) });
   const [getDetail, detail] = useLazyGetClustersByIdQueryPerformanceFingerprintIdQuery();
+  const [createPreflight, preflightRequest] = usePostClustersByIdPreflightsMutation();
+  const [startOperation, operationRequest] = usePostClustersByIdOperationsMutation();
 
   useEffect(() => setSelectedFingerprint(undefined), [selection]);
 
@@ -203,6 +217,32 @@ const QueryPerformance: FC<QueryPerformanceProps> = ({ clusterId }) => {
     if (!fingerprintId) return;
     setSelectedFingerprint(fingerprintId);
     void getDetail({ ...args, fingerprintId });
+  };
+  const beginOperation = async (type: 'query_analytics_enable' | 'query_analytics_disable') => {
+    setOperationError('');
+    try {
+      const result = await createPreflight({ id: clusterId, requestOperationPreflight: { type } }).unwrap();
+      setPreflight(result);
+      setConfirmation('');
+    } catch {
+      setOperationError(t('queryPerformancePreflightError'));
+    }
+  };
+  const launchOperation = async () => {
+    if (!preflight?.id) return;
+    setOperationError('');
+    try {
+      const result = await startOperation({
+        id: clusterId,
+        requestOperationStart: { preflight_id: preflight.id, confirmation },
+      }).unwrap();
+      setAcceptedOperation(result.operation_id);
+      setPreflight(undefined);
+      setConfirmation('');
+      refresh();
+    } catch {
+      setOperationError(t('queryPerformanceOperationError'));
+    }
   };
 
   if (overview.isError) {
@@ -219,6 +259,8 @@ const QueryPerformance: FC<QueryPerformanceProps> = ({ clusterId }) => {
   const status = queryPerformanceStatusConfig(data?.status?.state);
   const summary: QueryPerformanceMetrics = data?.summary ?? {};
   const coverage = data?.coverage ?? [];
+  const canEnable = data?.status?.state === 'disabled' || data?.status?.state === 'rollout_required';
+  const canDisable = ['enabled', 'collecting', 'degraded'].includes(data?.status?.state ?? '');
 
   return (
     <Paper sx={{ p: 2 }}>
@@ -229,9 +271,21 @@ const QueryPerformance: FC<QueryPerformanceProps> = ({ clusterId }) => {
             {t('queryPerformanceDescription')}
           </Typography>
         </Box>
-        <Button onClick={refresh} disabled={overview.isFetching}>
-          {t('refresh')}
-        </Button>
+        <Stack direction="row" gap={1} alignItems="center">
+          {canEnable && (
+            <Button variant="outlined" onClick={() => void beginOperation('query_analytics_enable')}>
+              {t('queryPerformanceEnable')}
+            </Button>
+          )}
+          {canDisable && (
+            <Button color="warning" variant="outlined" onClick={() => void beginOperation('query_analytics_disable')}>
+              {t('queryPerformanceDisable')}
+            </Button>
+          )}
+          <Button onClick={refresh} disabled={overview.isFetching}>
+            {t('refresh')}
+          </Button>
+        </Stack>
       </Stack>
 
       {overview.isFetching && <LinearProgress sx={{ mb: 2 }} />}
@@ -242,6 +296,16 @@ const QueryPerformance: FC<QueryPerformanceProps> = ({ clusterId }) => {
           version: data?.status?.postgres_version ?? '',
         })}
       </Alert>
+      {operationError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {operationError}
+        </Alert>
+      )}
+      {acceptedOperation && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {t('queryPerformanceOperationAccepted', { id: acceptedOperation })}
+        </Alert>
+      )}
 
       {coverage.length > 0 && (
         <Stack direction="row" flexWrap="wrap" gap={1} mb={2} aria-label={t('queryPerformanceCoverage')}>
@@ -391,6 +455,50 @@ const QueryPerformance: FC<QueryPerformanceProps> = ({ clusterId }) => {
             loading={detail.isFetching}
           />
         ))}
+
+      <Dialog open={Boolean(preflight)} onClose={() => setPreflight(undefined)} fullWidth maxWidth="sm">
+        <DialogTitle>{t('queryPerformanceOperationPreflight')}</DialogTitle>
+        <DialogContent>
+          {(preflight?.blockers?.length ?? 0) > 0 && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {preflight?.blockers?.join(', ')}
+            </Alert>
+          )}
+          <Typography variant="subtitle2">{t('queryPerformanceAffectedNodes')}</Typography>
+          <Typography variant="body2" mb={2}>
+            {preflight?.affected_nodes?.join(', ') || '—'}
+          </Typography>
+          <Typography variant="subtitle2">{t('queryPerformanceOperationPlan')}</Typography>
+          <Box component="ol" mt={0} pl={3}>
+            {preflight?.plan?.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </Box>
+          <TextField
+            fullWidth
+            label={t('queryPerformanceConfirmation')}
+            helperText={t('queryPerformanceConfirmationHelp', { phrase: preflight?.confirmation })}
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            autoComplete="off"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPreflight(undefined)}>{t('cancel')}</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={
+              preflightRequest.isLoading ||
+              operationRequest.isLoading ||
+              Boolean(preflight?.blockers?.length) ||
+              confirmation !== preflight?.confirmation
+            }
+            onClick={() => void launchOperation()}>
+            {t('queryPerformanceStartOperation')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };
