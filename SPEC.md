@@ -112,7 +112,7 @@ T8|x|add guarded planned switchover vertical slice|V5,V21,V22,V23,V32,I.op.v1,I.
 T9|x|add reload + guarded rolling-restart + PGSM package/config/bootstrap/enable/disable vertical slices|V5,V21,V22,V24,V32,V35,V36,V37,V38,V39,V40,V44,V45,I.op.v1,I.automation,I.automation.query
 T10|x|add guarded replica-reinit vertical slice|V5,V21,V22,V25,V32,I.op.v1,I.automation
 T11|x|add pgBackRest health, scheduler ownership, manual full/diff backup, restore evidence|V17,V21,V22,V26,V27,V32,I.op.v1,I.authority,I.automation
-T12|.|run v1 safety/query/e2e + stock-upgrade gates; publish backup/upgrade/verify/rollback docs + version set|V10,V12,V13,V14,V15,V32,V35,V37,V39,V40,V41,V42,V43,V44,V45,I.release,I.verify
+T12|x|run v1 safety/query/e2e + stock-upgrade gates; publish backup/upgrade/verify/rollback docs + version set|V10,V12,V13,V14,V15,V32,V35,V37,V39,V40,V41,V42,V43,V44,V45,I.release,I.verify
 T13|.|phase 2 add/remove nodes + supported `config_pgcluster` management|V5,V7,V29,I.automation
 T14|.|phase 2 rolling updates/upgrades + emergency-failover policy|V5,V7,V29,I.automation
 T15|.|phase 2 isolated restore + PITR workflow|V5,V7,V30,I.automation

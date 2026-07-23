@@ -1,0 +1,121 @@
+---
+name: "Management v1"
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "ci/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  service:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: pg_console
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pg_console"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: console/service
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: console/service/go.mod
+          cache-dependency-path: console/service/go.sum
+
+      - name: Generate Swagger server
+        run: |
+          go install github.com/go-swagger/go-swagger/cmd/swagger@v0.35.3
+          "$(go env GOPATH)/bin/swagger" generate server \
+            --name PgConsole \
+            --spec api/swagger.yaml \
+            --principal interface{} \
+            --exclude-main
+
+      - name: Verify stock upgrade and service
+        run: |
+          PG_CONSOLE_TEST_DSN="postgres://postgres:test@127.0.0.1:5432/pg_console?sslmode=disable" \
+            go test -mod=readonly ./migrations
+          PG_CONSOLE_TEST_DSN="postgres://postgres:test@127.0.0.1:5432/pg_console?sslmode=disable" \
+            go test -mod=readonly ./internal/storage
+          go test -mod=readonly ./...
+          go vet -mod=readonly ./...
+
+  automation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: make bootstrap-dev
+
+      - name: Verify Automation contracts
+        run: |
+          make linter-ansible-lint
+          make prepare-collections
+          export ANSIBLE_COLLECTIONS_PATH="$PWD/.ansible-lint-env"
+          ansible-playbook automation/tests/maintenance_operations_contract.yml
+          ansible-playbook automation/tests/switchover_contract.yml
+          ansible-playbook automation/tests/replica_reinit_contract.yml
+          ansible-playbook automation/tests/pg_stat_monitor_contract.yml
+          ansible-playbook automation/tests/backup_pgbackrest_contract.yml
+
+  ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: console/ui
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.15.0"
+          cache: yarn
+          cache-dependency-path: console/ui/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Verify management UI
+        run: |
+          yarn vitest \
+            src/widgets/cluster-health/ui/index.test.tsx \
+            src/widgets/query-performance/ui/index.test.tsx \
+            src/pages/operation-log/ui/index.test.tsx \
+            src/widgets/operations-table/lib/hooks.test.tsx \
+            src/widgets/operations-table/ui/index.test.ts
+          yarn build
+
+      - name: Install Chromium
+        run: yarn playwright install --with-deps chromium
+
+      - name: Verify management browser journey
+        run: yarn e2e e2e/management-v1.spec.ts
+        env:
+          PLAYWRIGHT_WEB_SERVER: "1"
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+          VITE_API_URL: http://127.0.0.1:4173/api/v1/
+          VITE_AUTH_TOKEN: management-v1-token
+          VITE_DBDESK_URL: ""

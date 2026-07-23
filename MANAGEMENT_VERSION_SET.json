@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "name": "management-v1",
+  "source_baseline": "2.9.0",
+  "components": {
+    "ui": {
+      "path": "console/ui",
+      "version_source": "release_tag"
+    },
+    "api": {
+      "path": "console/service",
+      "version_source": "release_tag"
+    },
+    "console_db": {
+      "path": "console/db",
+      "version_source": "release_tag",
+      "migration_head": 20260723120000
+    },
+    "automation": {
+      "path": "automation",
+      "version_source": "release_tag"
+    }
+  }
+}
