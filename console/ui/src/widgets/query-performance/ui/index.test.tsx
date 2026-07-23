@@ -81,6 +81,9 @@ describe('query performance UI', () => {
       role: 'reader',
       application: 'portal',
     });
+    expect(buildQueryPerformanceArgs(7, { rangeHours: 168 }, Date.parse('2026-07-22T12:00:00Z')).from).toBe(
+      '2026-07-15T12:00:00.000Z',
+    );
   });
 
   it('normalizes trend values without dividing by zero', () => {

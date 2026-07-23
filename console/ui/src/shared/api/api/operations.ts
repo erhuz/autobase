@@ -22,6 +22,10 @@ const injectedRtkApi = api.injectEndpoints({
           ? [...result.data.map(({ id }) => ({ type: 'Operations', id }) as const), { type: 'Operations', id: 'LIST' }]
           : [{ type: 'Operations', id: 'LIST' }],
     }),
+    getOperationsById: build.query<GetOperationsByIdApiResponse, GetOperationsByIdApiArg>({
+      query: (queryArg) => ({ url: `/operations/${queryArg.id}` }),
+      providesTags: (result, error, { id }) => [{ type: 'Operations', id }],
+    }),
     getOperationsByIdLog: build.query<GetOperationsByIdLogApiResponse, GetOperationsByIdLogApiArg>({
       query: (queryArg) => ({ url: `/operations/${queryArg.id}/log` }),
       transformResponse: (response, meta) => ({
@@ -53,7 +57,14 @@ export type GetOperationsApiArg = {
   limit?: number;
   offset?: number;
 };
-export type GetOperationsByIdLogApiResponse = /** status 200 OK */ string;
+export type GetOperationsByIdApiResponse = ResponseOperationDetail;
+export type GetOperationsByIdApiArg = {
+  id: number;
+};
+export type GetOperationsByIdLogApiResponse = {
+  log: string;
+  isComplete: boolean;
+};
 export type GetOperationsByIdLogApiArg = {
   /** Operation id */
   id: number;
@@ -76,6 +87,21 @@ export type ResponseOperationsList = {
   data?: ResponseOperation[];
   meta?: PaginationInfoForListRequests;
 };
+export type ResponseOperationDetail = {
+  id?: number;
+  cluster_id?: number;
+  type?: string;
+  status?: string;
+  actor?: string;
+  sanitized_params?: object;
+  preflight_snapshot?: object;
+  plan?: string[];
+  affected_nodes?: string[];
+  final_verification?: object;
+  safe_next_action?: string | null;
+  started?: string;
+  finished?: string | null;
+};
 export type ErrorObject = {
   code?: number;
   title?: string;
@@ -84,6 +110,8 @@ export type ErrorObject = {
 export const {
   useGetOperationsQuery,
   useLazyGetOperationsQuery,
+  useGetOperationsByIdQuery,
+  useLazyGetOperationsByIdQuery,
   useGetOperationsByIdLogQuery,
   useLazyGetOperationsByIdLogQuery,
 } = injectedRtkApi;

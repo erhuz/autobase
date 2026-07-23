@@ -37,6 +37,10 @@ const injectedRtkApi = api.injectEndpoints({
       query: (queryArg) => ({ url: `/clusters/${queryArg.id}` }),
       providesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
     }),
+    getClustersByIdHealth: build.query<GetClustersByIdHealthApiResponse, GetClustersByIdHealthApiArg>({
+      query: (queryArg) => ({ url: `/clusters/${queryArg.id}/health` }),
+      providesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
+    }),
     getClustersByIdQueryPerformance: build.query<
       GetClustersByIdQueryPerformanceApiResponse,
       GetClustersByIdQueryPerformanceApiArg
@@ -177,6 +181,10 @@ export type GetClustersDefaultNameApiResponse = /** status 200 OK */ ResponseClu
 export type GetClustersDefaultNameApiArg = void;
 export type GetClustersByIdApiResponse = /** status 200 OK */ ClusterInfo;
 export type GetClustersByIdApiArg = {
+  id: number;
+};
+export type GetClustersByIdHealthApiResponse = ResponseClusterHealth;
+export type GetClustersByIdHealthApiArg = {
   id: number;
 };
 export type QueryPerformanceApiArg = {
@@ -342,6 +350,78 @@ export type ResponseOperationPreflight = {
   expires_at?: string;
 };
 export type ResponseOperationStart = { operation_id?: number; status?: string };
+export type HealthMember = {
+  name?: string;
+  role?: string;
+  state?: string;
+  timeline?: number | null;
+  lag?: number | null;
+  pending_restart?: boolean | null;
+};
+export type HealthTopology = {
+  state?: string;
+  observed_at?: string | null;
+  patroni_reachable?: boolean | null;
+  leader?: HealthMember | null;
+  replicas?: HealthMember[];
+  members?: HealthMember[];
+};
+export type HealthDcs = {
+  state?: string;
+  type?: string;
+  reachable?: boolean | null;
+  members?: string[];
+};
+export type HealthRoutingTarget = {
+  role?: string;
+  address?: string;
+  port?: number | null;
+  reachable?: boolean | null;
+  role_matches?: boolean | null;
+};
+export type HealthRouting = {
+  state?: string;
+  targets?: HealthRoutingTarget[];
+};
+export type HealthBackup = {
+  state?: string;
+  repository_reachable?: boolean | null;
+  latest_full?: string | null;
+  latest_differential?: string | null;
+  retention?: object;
+  wal_continuous?: boolean | null;
+  locks?: string[];
+  scheduler_owner?: string | null;
+  fresh?: boolean | null;
+  freshness_policy?: string | null;
+  restore_tested_at?: string | null;
+};
+export type HealthOperation = {
+  id?: number;
+  type?: string;
+  status?: string;
+  started?: string;
+  finished?: string | null;
+  safe_next_action?: string | null;
+};
+export type HealthOperationSummary = {
+  active?: HealthOperation | null;
+  latest?: HealthOperation | null;
+  unresolved?: HealthOperation | null;
+};
+export type HealthRecoverability = {
+  state?: 'healthy' | 'degraded';
+  reasons?: string[];
+};
+export type ResponseClusterHealth = {
+  observed_at?: string;
+  topology?: HealthTopology;
+  dcs?: HealthDcs;
+  routing?: HealthRouting;
+  backup?: HealthBackup;
+  operation?: HealthOperationSummary;
+  recoverability?: HealthRecoverability;
+};
 export type ClusterInfoInstance = {
   id?: number;
   name?: string;
@@ -394,6 +474,8 @@ export const {
   useLazyGetClustersDefaultNameQuery,
   useGetClustersByIdQuery,
   useLazyGetClustersByIdQuery,
+  useGetClustersByIdHealthQuery,
+  useLazyGetClustersByIdHealthQuery,
   useGetClustersByIdQueryPerformanceQuery,
   useLazyGetClustersByIdQueryPerformanceQuery,
   useGetClustersByIdQueryPerformanceFingerprintIdQuery,

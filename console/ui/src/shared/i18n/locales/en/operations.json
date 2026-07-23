@@ -12,5 +12,16 @@
   "lastThreeMonths": "Last three months",
   "lastSixMonths": "Last six months",
   "lastYear": "Last year",
-  "log": "Log"
+  "log": "Log",
+  "actor": "Actor",
+  "sanitizedParameters": "Sanitized parameters",
+  "preflightSnapshot": "Preflight snapshot",
+  "plan": "Plan",
+  "affectedNodes": "Affected nodes",
+  "finalVerification": "Final verification",
+  "safeNextAction": "Safe next action",
+  "detailLoadError": "Operation detail could not be loaded.",
+  "allTypes": "All types",
+  "allStatuses": "All statuses",
+  "clusterFilter": "Cluster"
 }

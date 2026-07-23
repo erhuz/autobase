@@ -9,6 +9,7 @@ import { useAppSelector } from '@app/redux/store/hooks.ts';
 import { selectPollingInterval } from '@app/redux/slices/pollingIntervalSlice/pollingIntervalSlice.ts';
 import Spinner from '@shared/ui/spinner';
 import QueryPerformance from '@widgets/query-performance';
+import ClusterHealth from '@widgets/cluster-health';
 
 const OverviewCluster: FC = () => {
   const { clusterId } = useParams();
@@ -22,6 +23,9 @@ const OverviewCluster: FC = () => {
     <Spinner />
   ) : (
     <Grid container spacing={2} padding={1}>
+      <Grid size={{ xs: 12 }}>
+        <ClusterHealth clusterId={Number(clusterId)} />
+      </Grid>
       <Grid size={{ xs: 12 }}>
         <ClusterOverviewTable
           clusterName={cluster.data?.name}
