@@ -333,7 +333,8 @@ export type ResponseQueryPerformanceDetail = {
   histogram?: number[];
 };
 export type RequestOperationPreflight = {
-  type: 'query_analytics_enable' | 'query_analytics_disable';
+  type: 'switchover' | 'query_analytics_enable' | 'query_analytics_disable';
+  target?: string;
 };
 export type RequestOperationStart = { preflight_id: number; confirmation: string };
 export type ResponsePreflightCheck = { name?: string; ok?: boolean };

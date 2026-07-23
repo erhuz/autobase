@@ -16,6 +16,7 @@ const (
 	OperationStatusSuccess    = OperationStatusSucceeded
 
 	OperationTypeDeploy                = "deploy"
+	OperationTypeSwitchover            = "switchover"
 	OperationTypeQueryAnalyticsEnable  = "query_analytics_enable"
 	OperationTypeQueryAnalyticsDisable = "query_analytics_disable"
 

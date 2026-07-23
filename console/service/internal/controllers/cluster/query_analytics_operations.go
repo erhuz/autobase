@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -107,11 +106,9 @@ func queryAnalyticsState(operationType string) (string, bool) {
 }
 
 func (h *guardedOperationsHandler) queryAnalyticsOperationInputs(ctx context.Context, clusterInfo *storage.Cluster, state string) ([]string, []byte, error) {
-	extraVars := map[string]any{}
-	if len(clusterInfo.ExtraVars) != 0 {
-		if err := json.Unmarshal(clusterInfo.ExtraVars, &extraVars); err != nil {
-			return nil, nil, err
-		}
+	envs, extraVars, err := h.baseOperationInputs(ctx, clusterInfo)
+	if err != nil {
+		return nil, nil, err
 	}
 	extraVars["query_analytics_state"] = state
 	extraVars["enable_pg_stat_monitor"] = state == "enabled"
@@ -120,26 +117,6 @@ func (h *guardedOperationsHandler) queryAnalyticsOperationInputs(ctx context.Con
 	extraVars["query_analytics_collector_cidrs"] = h.cfg.QueryAnalytics.CollectorCIDRs
 	extraVars["patroni_cluster_name"] = clusterInfo.Name
 
-	envs := []string{"ANSIBLE_JSON_LOG_FILE=" + ansibleLogDir + "/" + clusterInfo.Name + ".json"}
-	if len(clusterInfo.Inventory) != 0 {
-		envs = append(envs, "ANSIBLE_INVENTORY_JSON="+base64.StdEncoding.EncodeToString(clusterInfo.Inventory))
-	}
-	if clusterInfo.SecretID != nil {
-		secretValues, location, err := getSecretEnvs(ctx, h.log, h.db, *clusterInfo.SecretID, h.cfg.EncryptionKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		if location == ExtraVarsParamLocation {
-			for _, value := range secretValues {
-				parts := strings.SplitN(value, "=", 2)
-				if len(parts) == 2 {
-					extraVars[parts[0]] = parts[1]
-				}
-			}
-		} else {
-			envs = append(envs, secretValues...)
-		}
-	}
 	if state == "enabled" {
 		password, err := h.db.GetQueryAnalyticsCredential(ctx, clusterInfo.ID, h.cfg.EncryptionKey)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -162,16 +139,24 @@ func operationTopology(servers []storage.Server) ([]topologyNode, int, int) {
 	leaders, healthy := 0, 0
 	for _, server := range servers {
 		role, status := strings.ToLower(server.Role), strings.ToLower(server.Status)
-		if role == "leader" || role == "primary" || role == "master" {
+		if leaderRole(role) {
 			leaders++
 		}
-		if status == "running" || status == "streaming" {
+		if healthyStatus(status) {
 			healthy++
 		}
 		nodes = append(nodes, topologyNode{Name: server.Name, Role: role, Status: status, Timeline: server.Timeline})
 	}
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
 	return nodes, leaders, healthy
+}
+
+func leaderRole(role string) bool {
+	return role == "leader" || role == "primary" || role == "master"
+}
+
+func healthyStatus(status string) bool {
+	return status == "running" || status == "streaming"
 }
 
 func topologyFresh(servers []storage.Server, since time.Time) bool {
@@ -190,7 +175,7 @@ func queryAnalyticsPlan(nodes []topologyNode) ([]string, []string) {
 	plan, affected := []string{}, []string{}
 	var leader string
 	for _, node := range nodes {
-		if node.Role == "leader" || node.Role == "primary" || node.Role == "master" {
+		if leaderRole(node.Role) {
 			leader = node.Name
 			continue
 		}

@@ -108,7 +108,7 @@ T4|x|add unified health + all-node complete-bucket collectors + health/query GET
 T5|x|make import passive; report health/query capability drift + gate management|V3,V18,V34,V35,V39,V40,V44,V45,I.api.health,I.api.query,I.authority
 T6|x|add shared preflight/confirm/launch + operation detail + query enable/disable + redaction|V4,V8,V19,V20,V21,V22,V28,V32,V34,V36,V40,V44,V45,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query
 T7|x|build cluster health + operation-center + query-performance UI on existing routes|V16,V17,V19,V20,V26,V34,V42,V43,V44,V45,I.ui.health,I.ui.ops,I.ui.query,I.api.health,I.api.ops,I.api.query
-T8|.|add guarded planned switchover vertical slice|V5,V21,V22,V23,V32,I.op.v1,I.automation
+T8|x|add guarded planned switchover vertical slice|V5,V21,V22,V23,V32,I.op.v1,I.automation
 T9|.|add reload + guarded rolling-restart + PGSM package/config/bootstrap/enable/disable vertical slices|V5,V21,V22,V24,V32,V35,V36,V37,V38,V39,V40,V44,V45,I.op.v1,I.automation,I.automation.query
 T10|.|add guarded replica-reinit vertical slice|V5,V21,V22,V25,V32,I.op.v1,I.automation
 T11|.|add pgBackRest health, scheduler ownership, manual full/diff backup, restore evidence|V17,V21,V22,V26,V27,V32,I.op.v1,I.authority,I.automation

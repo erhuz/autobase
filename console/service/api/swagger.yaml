@@ -1084,7 +1084,9 @@ definitions:
     properties:
       type:
         type: string
-        enum: [query_analytics_enable, query_analytics_disable]
+        enum: [switchover, query_analytics_enable, query_analytics_disable]
+      target:
+        type: string
 
   Request.OperationStart:
     type: object

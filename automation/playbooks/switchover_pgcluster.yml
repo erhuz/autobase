@@ -1,0 +1,190 @@
+---
+- name: vitabaks.autobase.switchover_pgcluster | Refresh topology
+  hosts: postgres_cluster
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Define bind_address
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.bind_address
+      when: bind_address is not defined
+
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Detect current Patroni leader
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/leader
+        status_code: [200, 503]
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: switchover_patroni_role
+      changed_when: false
+      check_mode: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Build current primary group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: primary
+        postgresql_exists: true
+      loop: "{{ groups['postgres_cluster'] }}"
+      when: hostvars[item].switchover_patroni_role.status | default(0) == 200
+      changed_when: false
+      check_mode: false
+      run_once: true
+
+    - name: Build current secondary group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: secondary
+        postgresql_exists: true
+      loop: "{{ groups['postgres_cluster'] }}"
+      when: hostvars[item].switchover_patroni_role.status | default(0) == 503
+      changed_when: false
+      check_mode: false
+      run_once: true
+
+    - name: Require one leader and selected replica
+      ansible.builtin.assert:
+        that:
+          - groups.get('primary', []) | length == 1
+          - groups.get('secondary', []) | length >= 1
+          - patroni_switchover_candidate_name | default('') | length > 0
+          - >-
+            patroni_switchover_candidate_name in groups.get('secondary', [])
+            or patroni_switchover_candidate_name in
+              (groups.get('secondary', [])
+              | map('extract', hostvars)
+              | map(attribute='ansible_hostname')
+              | list)
+            or patroni_switchover_candidate_name in
+              (groups.get('secondary', [])
+              | map('extract', hostvars)
+              | map(attribute='hostname', default='')
+              | list)
+      run_once: true
+
+    - name: Get current Patroni passwords
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.pre_checks
+        tasks_from: passwords
+      vars:
+        source_group: primary
+        postgresql_cluster_maintenance: true
+      when: patroni_superuser_password | default('') | length < 1
+
+- name: vitabaks.autobase.switchover_pgcluster | Execute selected switchover
+  hosts: primary
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Verify Patroni DCS access
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - patronictl
+          - -c
+          - /etc/patroni/patroni.yml
+          - list
+          - --format
+          - json
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+      changed_when: false
+
+    - name: Switchover Patroni leader role
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.update
+        tasks_from: switchover
+
+- name: vitabaks.autobase.switchover_pgcluster | Verify topology
+  hosts: postgres_cluster
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Verify Patroni member health
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/health
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      changed_when: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Refresh Patroni member role
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/leader
+        status_code: [200, 503]
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: switchover_final_role
+      changed_when: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Verify selected leader and replicas
+      ansible.builtin.assert:
+        that:
+          - >-
+            (patroni_switchover_candidate_name in switchover_node_names
+            and switchover_final_role.status == 200)
+            or
+            (patroni_switchover_candidate_name not in switchover_node_names
+            and switchover_final_role.status == 503)
+      vars:
+        switchover_node_names:
+          - "{{ inventory_hostname }}"
+          - "{{ ansible_hostname }}"
+          - "{{ hostname | default('') }}"
+
+- name: vitabaks.autobase.switchover_pgcluster | Verify primary routing
+  hosts: primary
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Verify every primary route reaches writable PostgreSQL
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - "{{ postgresql_bin_dir }}/psql"
+          - -h
+          - "{{ item.address }}"
+          - -p
+          - "{{ item.port | string }}"
+          - -U
+          - "{{ patroni_superuser_username }}"
+          - -d
+          - postgres
+          - -tAXc
+          - "select pg_is_in_recovery()"
+      environment:
+        PGPASSWORD: "{{ patroni_superuser_password }}"
+      loop: "{{ switchover_primary_routing_targets }}"
+      register: switchover_routing_checks
+      changed_when: false
+      no_log: true
+
+    - name: Require every primary route to be writable
+      ansible.builtin.assert:
+        that:
+          - switchover_primary_routing_targets | length > 0
+          - switchover_routing_checks.results | map(attribute='stdout') | unique | list == ['f']
+      no_log: true

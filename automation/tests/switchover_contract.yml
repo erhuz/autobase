@@ -1,0 +1,24 @@
+---
+- name: Verify guarded switchover contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check selected candidate, DCS, topology, and routing guards
+      ansible.builtin.assert:
+        that:
+          - candidate in playbook
+          - dcs_check in playbook
+          - topology_check in playbook
+          - routing_check in playbook
+          - no_log_marker in playbook
+          - candidate in role
+          - "role | regex_findall('ignore_errors: true') | length == 1"
+      vars:
+        playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/switchover_pgcluster.yml') }}"
+        role: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/update/tasks/switchover.yml') }}"
+        candidate: patroni_switchover_candidate_name
+        dcs_check: Verify Patroni DCS access
+        topology_check: Verify selected leader and replicas
+        routing_check: select pg_is_in_recovery()
+        no_log_marker: "no_log: true"
