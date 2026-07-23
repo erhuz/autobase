@@ -344,10 +344,15 @@ export type RequestOperationPreflight = {
     | 'query_analytics_disable'
     | 'node_add'
     | 'node_remove'
-    | 'config_update';
+    | 'config_update'
+    | 'rolling_update'
+    | 'postgresql_upgrade'
+    | 'emergency_failover';
   target?: string;
   params?: {
     postgresql_parameters?: Array<{ option: string; value: string }>;
+    update_target?: 'postgres' | 'patroni' | 'system';
+    postgresql_version?: number;
   };
 };
 export type RequestOperationStart = { preflight_id: number; confirmation: string };

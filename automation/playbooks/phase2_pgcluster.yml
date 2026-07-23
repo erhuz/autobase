@@ -1,0 +1,239 @@
+---
+- name: vitabaks.autobase.phase2_pgcluster | Validate fixed phase 2 request
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Select PostgreSQL nodes
+      ansible.builtin.set_fact:
+        phase2_postgres_nodes: "{{ groups.get('postgres_cluster', []) }}"
+
+    - name: Require supported fixed phase 2 inputs
+      ansible.builtin.assert:
+        that:
+          - phase2_operation in ['rolling_update', 'postgresql_upgrade', 'emergency_failover']
+          - phase2_postgres_nodes | length >= 3
+          - phase2_verification_nodes | length >= 2
+          - phase2_operation == 'emergency_failover' or phase2_verification_nodes | length >= 3
+          - phase2_operation != 'rolling_update' or target in ['postgres', 'patroni', 'system']
+          - phase2_operation != 'postgresql_upgrade' or pg_old_version | int >= 14
+          - phase2_operation != 'postgresql_upgrade' or pg_new_version | int <= 18
+          - phase2_operation != 'postgresql_upgrade' or pg_new_version | int > pg_old_version | int
+          - phase2_operation != 'postgresql_upgrade' or phase2_pgbackrest_enabled | bool
+          - phase2_operation != 'postgresql_upgrade' or pgbackrest_scheduler_host | default('') | length > 0
+          - phase2_operation != 'emergency_failover' or emergency_failover_candidate | length > 0
+          - phase2_operation != 'emergency_failover' or emergency_failover_inventory_target in groups.get('replica', [])
+          - phase2_operation != 'emergency_failover' or emergency_failover_inventory_target not in groups.get('master', [])
+          - phase2_operation != 'emergency_failover' or emergency_failover_inventory_target in phase2_verification_nodes
+
+    - name: Select final verifier
+      ansible.builtin.add_host:
+        name: >-
+          {{
+            emergency_failover_inventory_target
+            if phase2_operation == 'emergency_failover'
+            else phase2_verification_nodes | first
+          }}
+        groups: phase2_verifier
+      changed_when: false
+
+    - name: Select emergency failover target
+      ansible.builtin.add_host:
+        name: "{{ emergency_failover_inventory_target }}"
+        groups: phase2_emergency_target
+      when: phase2_operation == 'emergency_failover'
+      changed_when: false
+
+    - name: Select backup verifier
+      ansible.builtin.add_host:
+        name: >-
+          {{
+            emergency_failover_inventory_target
+            if phase2_operation == 'emergency_failover'
+            else pgbackrest_scheduler_host
+          }}
+        groups: phase2_backup_verifier
+      when: phase2_pgbackrest_enabled | bool
+      changed_when: false
+
+- name: vitabaks.autobase.phase2_pgcluster | Rolling package update
+  ansible.builtin.import_playbook: update_pgcluster.yml
+  when: phase2_operation == 'rolling_update'
+
+- name: vitabaks.autobase.phase2_pgcluster | PostgreSQL major upgrade
+  ansible.builtin.import_playbook: pg_upgrade.yml
+  when: phase2_operation == 'postgresql_upgrade'
+
+- name: vitabaks.autobase.phase2_pgcluster | Guarded emergency failover
+  hosts: phase2_emergency_target
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Define bind_address
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.bind_address
+      when: bind_address is not defined
+
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Recheck target remains a healthy replica
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/replica
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      changed_when: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Refresh Patroni DCS members immediately before failover
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - patronictl
+          - -c
+          - /etc/patroni/patroni.yml
+          - list
+          - --format
+          - json
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+      register: phase2_emergency_members
+      changed_when: false
+
+    - name: Require no DCS leader and selected replica candidate
+      ansible.builtin.assert:
+        that:
+          - phase2_emergency_members.stdout | from_json | selectattr('Role', 'equalto', 'Leader') | list | length == 0
+          - >-
+            phase2_emergency_members.stdout | from_json
+            | selectattr('Member', 'equalto', emergency_failover_candidate)
+            | selectattr('Role', 'equalto', 'Replica') | list | length == 1
+
+    - name: Perform explicit emergency failover
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - patronictl
+          - -c
+          - /etc/patroni/patroni.yml
+          - failover
+          - "{{ patroni_cluster_name }}"
+          - --candidate
+          - "{{ emergency_failover_candidate }}"
+          - --force
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+      changed_when: true
+
+    - name: Require selected candidate becomes healthy leader
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/leader
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: phase2_emergency_leader
+      until: phase2_emergency_leader.status == 200
+      retries: 60
+      delay: 2
+      changed_when: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+- name: vitabaks.autobase.phase2_pgcluster | Verify DCS, topology, routing, and PostgreSQL version
+  hosts: phase2_verifier
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Define bind_address
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.bind_address
+      when: bind_address is not defined
+
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Verify post-mutation topology and primary routing
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.update
+        tasks_from: verify_topology_routing
+      vars:
+        operation_postgres_nodes: "{{ phase2_verification_nodes }}"
+
+    - name: Verify Patroni DCS membership after phase 2 operation
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - patronictl
+          - -c
+          - /etc/patroni/patroni.yml
+          - list
+          - --format
+          - json
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+      register: phase2_dcs_members
+      changed_when: false
+      retries: 60
+      delay: 2
+      until:
+        - phase2_dcs_members.rc == 0
+        - phase2_dcs_members.stdout | from_json | length >= phase2_verification_nodes | length
+        - phase2_dcs_members.stdout | from_json | selectattr('Role', 'equalto', 'Leader') | list | length == 1
+
+    - name: Read PostgreSQL version after major upgrade
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -h
+          - "127.0.0.1"
+          - -p
+          - "{{ postgresql_port | default(5432) | string }}"
+          - -d
+          - postgres
+          - -tAXc
+          - show server_version_num
+      register: phase2_postgresql_version
+      changed_when: false
+      when: phase2_operation == 'postgresql_upgrade'
+
+    - name: Require requested PostgreSQL major version
+      ansible.builtin.assert:
+        that:
+          - phase2_postgresql_version.stdout | int // 10000 == pg_new_version | int
+      when: phase2_operation == 'postgresql_upgrade'
+
+- name: vitabaks.autobase.phase2_pgcluster | Verify pgBackRest
+  hosts: phase2_backup_verifier
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Verify pgBackRest repository and WAL after phase 2 operation
+      become_user: "{{ pgbackrest_repo_user if inventory_hostname in groups.get('pgbackrest', []) else 'postgres' }}"
+      ansible.builtin.command:
+        argv: [pgbackrest, "--stanza={{ pgbackrest_stanza }}", check]
+      register: phase2_pgbackrest_check
+      changed_when: false
+
+    - name: Require successful pgBackRest verification
+      ansible.builtin.assert:
+        that:
+          - phase2_pgbackrest_check.rc == 0

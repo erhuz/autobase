@@ -142,6 +142,8 @@ func operationTarget(operationType string, desired []byte) (string, error) {
 		return state.Target, nil
 	case storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove:
 		return lifecycleDesiredTarget(desired)
+	case storage.OperationTypeEmergencyFailover:
+		return phase2DesiredTarget(desired)
 	default:
 		return "", nil
 	}

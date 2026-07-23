@@ -124,32 +124,9 @@ func (h *guardedOperationsHandler) lifecyclePreflightState(
 
 	dcs, dcsReady := operationDCSState(clusterInfo)
 	routing := primaryRoutingTargets(clusterInfo.ConnectionInfo)
-	backupConfigured := backupEnabled(clusterInfo.ExtraVars)
-	backupScheduler, backupReady := "", !backupConfigured
-	backupObserved := map[string]any{"configured": backupConfigured}
-	if backupConfigured {
-		evidence, evidenceErr := h.db.GetBackupEvidence(ctx, clusterInfo.ID)
-		if evidenceErr != nil {
-			return nil, evidenceErr
-		}
-		owners, locks := []string{}, []string{}
-		if evidence != nil {
-			_ = json.Unmarshal(evidence.SchedulerOwners, &owners)
-			_ = json.Unmarshal(evidence.Locks, &locks)
-		}
-		freshFor := 10 * time.Minute
-		if h.cfg != nil && h.cfg.Backup.RunEvery > 0 {
-			freshFor = 2 * h.cfg.Backup.RunEvery
-		}
-		fresh := evidence != nil && time.Since(evidence.ObservedAt) >= 0 && time.Since(evidence.ObservedAt) <= freshFor
-		if len(owners) == 1 {
-			backupScheduler = owners[0]
-		}
-		backupReady = evidence != nil && fresh && evidence.RepositoryReachable && len(owners) == 1 && len(locks) == 0
-		backupObserved = map[string]any{
-			"configured": true, "fresh": fresh, "repository_reachable": evidence != nil && evidence.RepositoryReachable,
-			"scheduler_owners": owners, "locks": locks,
-		}
+	backup, err := h.operationBackupState(ctx, clusterInfo)
+	if err != nil {
+		return nil, err
 	}
 
 	targetGroups := make([]string, 0)
@@ -163,7 +140,7 @@ func (h *guardedOperationsHandler) lifecyclePreflightState(
 		{Name: "topology names resolved", OK: allNamed},
 		{Name: "DCS configured and Patroni reachable", OK: dcsReady},
 		{Name: "primary routing configured", OK: len(routing) > 0},
-		{Name: "backup verification ready", OK: backupReady},
+		{Name: "backup verification ready", OK: backup.Ready},
 		{Name: "topology refreshed now", OK: topologyFresh(servers, refreshStarted)},
 		{Name: "no active cluster mutation", OK: !active},
 	}
@@ -182,7 +159,7 @@ func (h *guardedOperationsHandler) lifecyclePreflightState(
 			preflightCheck{Name: "operation parameters omitted", OK: len(params) == 0},
 			preflightCheck{Name: "selected inventory replica", OK: selectedOK && selectedNodeOK && selectedNode.Role == "replica"},
 			preflightCheck{Name: "target is replica only", OK: selectedOK && lifecycleReplicaOnly(selected)},
-			preflightCheck{Name: "target is not backup scheduler", OK: !backupConfigured || !lifecycleHostMatches(selected, backupScheduler)},
+			preflightCheck{Name: "target is not backup scheduler", OK: !backup.Configured || !lifecycleHostMatches(selected, backup.Scheduler)},
 			preflightCheck{Name: "failover capacity remains after removal", OK: healthyReplicas >= 2},
 		)
 	case storage.OperationTypeConfigUpdate:
@@ -205,7 +182,7 @@ func (h *guardedOperationsHandler) lifecyclePreflightState(
 	}
 	desired := lifecycleDesired{
 		Action: operationType, Target: desiredTarget, PostgreSQLParameters: parameters,
-		Routing: routing, BackupEnabled: backupConfigured, BackupScheduler: backupScheduler,
+		Routing: routing, BackupEnabled: backup.Configured, BackupScheduler: backup.Scheduler,
 	}
 	affected := make([]string, 0, len(nodes)+1)
 	if operationType == storage.OperationTypeConfigUpdate {
@@ -223,7 +200,7 @@ func (h *guardedOperationsHandler) lifecyclePreflightState(
 	return &guardedPreflight{
 		observed: map[string]any{
 			"topology": nodes, "healthy_replicas": healthyReplicas, "dcs": dcs, "routing": routing,
-			"inventory_target": desiredTarget, "target_groups": targetGroups, "new_nodes": newNodes, "backup": backupObserved,
+			"inventory_target": desiredTarget, "target_groups": targetGroups, "new_nodes": newNodes, "backup": backup.Observed,
 		},
 		desired: desired, checks: checks, blockers: blockers, plan: plan, affectedNodes: affected,
 		confirmation: confirmation, topologyHash: hash,
@@ -277,7 +254,11 @@ func (h *guardedOperationsHandler) lifecycleOperationInputs(
 }
 
 func operationParams(operationType string, desired []byte) ([]byte, error) {
-	if operationType != storage.OperationTypeConfigUpdate {
+	switch operationType {
+	case storage.OperationTypeRollingUpdate, storage.OperationTypePostgreSQLUpgrade, storage.OperationTypeEmergencyFailover:
+		return phase2OperationParams(operationType, desired)
+	case storage.OperationTypeConfigUpdate:
+	default:
 		return nil, nil
 	}
 	var state lifecycleDesired

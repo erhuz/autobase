@@ -1,0 +1,46 @@
+---
+- name: Verify guarded phase 2 operation contracts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check fixed update, upgrade, failover, and final authority guards
+      ansible.builtin.assert:
+        that:
+          - update_import in playbook
+          - upgrade_import in playbook
+          - fixed_operations in playbook
+          - fixed_update_targets in playbook
+          - forward_upgrade in playbook
+          - backup_required in playbook
+          - rolling_replicas in update_playbook
+          - controlled_switchover in update_playbook
+          - fatal_update_failure in update_playbook
+          - immediate_candidate_recheck in playbook
+          - no_leader_guard in playbook
+          - explicit_failover in playbook
+          - topology_verification in playbook
+          - dcs_verification in playbook
+          - backup_verification in playbook
+          - version_verification in playbook
+          - arbitrary_shell not in playbook
+      vars:
+        playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/phase2_pgcluster.yml') }}"
+        update_playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/update_pgcluster.yml') }}"
+        update_import: "ansible.builtin.import_playbook: update_pgcluster.yml"
+        upgrade_import: "ansible.builtin.import_playbook: pg_upgrade.yml"
+        fixed_operations: "phase2_operation in ['rolling_update', 'postgresql_upgrade', 'emergency_failover']"
+        fixed_update_targets: "target in ['postgres', 'patroni', 'system']"
+        forward_upgrade: "pg_new_version | int > pg_old_version | int"
+        backup_required: "phase2_operation != 'postgresql_upgrade' or phase2_pgbackrest_enabled | bool"
+        rolling_replicas: "serial: 1"
+        controlled_switchover: "tasks_from: switchover"
+        fatal_update_failure: Stop when any package update failed
+        immediate_candidate_recheck: Recheck target remains a healthy replica
+        no_leader_guard: "selectattr('Role', 'equalto', 'Leader') | list | length == 0"
+        explicit_failover: Perform explicit emergency failover
+        topology_verification: "tasks_from: verify_topology_routing"
+        dcs_verification: Verify Patroni DCS membership after phase 2 operation
+        backup_verification: Verify pgBackRest repository and WAL after phase 2 operation
+        version_verification: Require requested PostgreSQL major version
+        arbitrary_shell: ansible.builtin.shell

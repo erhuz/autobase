@@ -178,7 +178,8 @@ func supportedOperationType(operationType string) bool {
 	case storage.OperationTypeSwitchover, storage.OperationTypeReload, storage.OperationTypeRollingRestart, storage.OperationTypeReplicaReinit,
 		storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff,
 		storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable,
-		storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate:
+		storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate,
+		storage.OperationTypeRollingUpdate, storage.OperationTypePostgreSQLUpgrade, storage.OperationTypeEmergencyFailover:
 		return true
 	default:
 		return false
@@ -199,6 +200,8 @@ func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterIn
 		return h.queryAnalyticsPreflightState(ctx, clusterInfo, operationType)
 	case storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate:
 		return h.lifecyclePreflightState(ctx, clusterInfo, operationType, target, params)
+	case storage.OperationTypeRollingUpdate, storage.OperationTypePostgreSQLUpgrade, storage.OperationTypeEmergencyFailover:
+		return h.phase2PreflightState(ctx, clusterInfo, operationType, target, params)
 	default:
 		return nil, errors.New("unsupported operation type")
 	}
@@ -225,6 +228,9 @@ func (h *guardedOperationsHandler) operationInputs(ctx context.Context, clusterI
 	case storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate:
 		envs, extraVars, err := h.lifecycleOperationInputs(ctx, clusterInfo, operationType, desired)
 		return envs, extraVars, lifecyclePlaybook, err
+	case storage.OperationTypeRollingUpdate, storage.OperationTypePostgreSQLUpgrade, storage.OperationTypeEmergencyFailover:
+		envs, extraVars, err := h.phase2OperationInputs(ctx, clusterInfo, operationType, desired)
+		return envs, extraVars, phase2Playbook, err
 	default:
 		return nil, nil, "", errors.New("unsupported operation type")
 	}

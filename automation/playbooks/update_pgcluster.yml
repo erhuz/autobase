@@ -277,6 +277,12 @@
           - "Update of PostgreSQL Cluster completed with errors. Check the Ansible log."
           - "Current version: {{ postgres_version.stdout }}"
       when: any_update_failed
+
+    - name: Stop when any package update failed
+      run_once: true # noqa run-once
+      ansible.builtin.fail:
+        msg: PostgreSQL Cluster update failed; inspect package task output before retrying.
+      when: any_update_failed
   tags:
     - update
     - update-extensions

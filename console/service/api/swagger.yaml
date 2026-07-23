@@ -1084,7 +1084,7 @@ definitions:
     properties:
       type:
         type: string
-        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update]
+        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update, rolling_update, postgresql_upgrade, emergency_failover]
       target:
         type: string
       params:
@@ -1099,6 +1099,14 @@ definitions:
         minItems: 1
         items:
           $ref: '#/definitions/Request.PostgreSQLParameter'
+      update_target:
+        type: string
+        enum: [postgres, patroni, system]
+      postgresql_version:
+        type: integer
+        format: int32
+        minimum: 14
+        maximum: 18
 
   Request.PostgreSQLParameter:
     type: object

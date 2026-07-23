@@ -46,6 +46,9 @@ const operationTypes = [
   'node_add',
   'node_remove',
   'config_update',
+  'rolling_update',
+  'postgresql_upgrade',
+  'emergency_failover',
 ];
 const operationStatuses = ['queued', 'running', 'succeeded', 'failed', 'cancelled'];
 const openEndedDate = '9999-12-31T23:59:59.999Z';

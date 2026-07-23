@@ -27,6 +27,9 @@ const (
 	OperationTypeNodeAdd               = "node_add"
 	OperationTypeNodeRemove            = "node_remove"
 	OperationTypeConfigUpdate          = "config_update"
+	OperationTypeRollingUpdate         = "rolling_update"
+	OperationTypePostgreSQLUpgrade     = "postgresql_upgrade"
+	OperationTypeEmergencyFailover     = "emergency_failover"
 
 	ClusterStatusFailed      = "failed"
 	ClusterStatusHealthy     = "healthy"
