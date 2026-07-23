@@ -49,6 +49,8 @@ const operationTypes = [
   'rolling_update',
   'postgresql_upgrade',
   'emergency_failover',
+  'restore',
+  'pitr',
 ];
 const operationStatuses = ['queued', 'running', 'succeeded', 'failed', 'cancelled'];
 const openEndedDate = '9999-12-31T23:59:59.999Z';

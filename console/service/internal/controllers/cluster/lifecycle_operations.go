@@ -257,6 +257,8 @@ func operationParams(operationType string, desired []byte) ([]byte, error) {
 	switch operationType {
 	case storage.OperationTypeRollingUpdate, storage.OperationTypePostgreSQLUpgrade, storage.OperationTypeEmergencyFailover:
 		return phase2OperationParams(operationType, desired)
+	case storage.OperationTypeRestore, storage.OperationTypePITR:
+		return recoveryOperationParams(operationType, desired)
 	case storage.OperationTypeConfigUpdate:
 	default:
 		return nil, nil

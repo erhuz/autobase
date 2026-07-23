@@ -30,6 +30,8 @@ const (
 	OperationTypeRollingUpdate         = "rolling_update"
 	OperationTypePostgreSQLUpgrade     = "postgresql_upgrade"
 	OperationTypeEmergencyFailover     = "emergency_failover"
+	OperationTypeRestore               = "restore"
+	OperationTypePITR                  = "pitr"
 
 	ClusterStatusFailed      = "failed"
 	ClusterStatusHealthy     = "healthy"

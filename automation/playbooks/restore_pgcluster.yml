@@ -1,0 +1,105 @@
+---
+- name: vitabaks.autobase.restore_pgcluster | Validate isolated recovery request
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: Require fixed isolated pgBackRest recovery inputs
+      ansible.builtin.assert:
+        that:
+          - recovery_operation in ['restore', 'pitr']
+          - recovery_isolated | bool
+          - restore_source_cluster_name | length > 0
+          - restore_target_cluster_name | length > 0
+          - restore_source_cluster_name != restore_target_cluster_name
+          - recovery_verification_nodes | length > 0
+          - recovery_verification_nodes | difference(groups.get('postgres_cluster', [])) | length == 0
+          - cloud_provider | length == 0
+          - patroni_cluster_name == restore_target_cluster_name
+          - patroni_cluster_bootstrap_method == 'pgbackrest'
+          - pgbackrest_install | bool
+          - not pgbackrest_auto_conf | bool
+          - pgbackrest_patroni_cluster_clean_bootstrap | bool
+          - pgbackrest_patroni_cluster_restore_command is match('^/usr/bin/pgbackrest --stanza=[A-Za-z0-9_-]+')
+          - recovery_operation != 'restore' or recovery_target_time | length == 0
+          - recovery_operation != 'restore' or '--type=' not in pgbackrest_patroni_cluster_restore_command
+          - recovery_operation != 'pitr' or recovery_target_time is match('^[0-9]{4}-[0-9]{2}-[0-9]{2}T')
+          - recovery_operation != 'pitr' or '--type=time' in pgbackrest_patroni_cluster_restore_command
+          - recovery_operation != 'pitr' or ('--target=' + recovery_target_time) in pgbackrest_patroni_cluster_restore_command
+
+    - name: Select recovery verifier
+      ansible.builtin.add_host:
+        name: "{{ recovery_verification_nodes | first }}"
+        groups: recovery_verifier
+      changed_when: false
+
+- name: vitabaks.autobase.restore_pgcluster | Run native point-in-time recovery
+  ansible.builtin.import_playbook: deploy_pgcluster.yml
+
+- name: vitabaks.autobase.restore_pgcluster | Verify isolated recovery
+  hosts: recovery_verifier
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tags: point_in_time_recovery
+  tasks:
+    - name: Define bind_address
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.bind_address
+      when: bind_address is not defined
+
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Read recovered Patroni DCS membership
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - patronictl
+          - -c
+          - /etc/patroni/patroni.yml
+          - list
+          - --format
+          - json
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+      register: recovery_dcs_members
+      changed_when: false
+      retries: 60
+      delay: 2
+      until:
+        - recovery_dcs_members.rc == 0
+        - recovery_dcs_members.stdout | from_json | length >= recovery_verification_nodes | length
+        - recovery_dcs_members.stdout | from_json | selectattr('Role', 'equalto', 'Leader') | list | length == 1
+
+    - name: Verify recovered PostgreSQL left recovery
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -h
+          - "127.0.0.1"
+          - -p
+          - "{{ postgresql_port | default(5432) | string }}"
+          - -d
+          - postgres
+          - -tAXc
+          - select not pg_is_in_recovery()
+      register: recovered_postgresql
+      changed_when: false
+
+    - name: Verify source pgBackRest repository
+      become_user: postgres
+      ansible.builtin.command:
+        argv: [pgbackrest, "--stanza={{ pgbackrest_stanza }}", check]
+      register: recovered_pgbackrest
+      changed_when: false
+
+    - name: Require recovered target authority checks
+      ansible.builtin.assert:
+        that:
+          - recovered_postgresql.stdout == 't'
+          - recovered_pgbackrest.rc == 0

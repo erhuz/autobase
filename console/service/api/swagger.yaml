@@ -1084,7 +1084,7 @@ definitions:
     properties:
       type:
         type: string
-        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update, rolling_update, postgresql_upgrade, emergency_failover]
+        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update, rolling_update, postgresql_upgrade, emergency_failover, restore, pitr]
       target:
         type: string
       params:
@@ -1107,6 +1107,12 @@ definitions:
         format: int32
         minimum: 14
         maximum: 18
+      source_cluster:
+        type: string
+        minLength: 1
+      recovery_target_time:
+        type: string
+        format: date-time
 
   Request.PostgreSQLParameter:
     type: object

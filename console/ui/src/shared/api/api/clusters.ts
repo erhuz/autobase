@@ -347,12 +347,16 @@ export type RequestOperationPreflight = {
     | 'config_update'
     | 'rolling_update'
     | 'postgresql_upgrade'
-    | 'emergency_failover';
+    | 'emergency_failover'
+    | 'restore'
+    | 'pitr';
   target?: string;
   params?: {
     postgresql_parameters?: Array<{ option: string; value: string }>;
     update_target?: 'postgres' | 'patroni' | 'system';
     postgresql_version?: number;
+    source_cluster?: string;
+    recovery_target_time?: string;
   };
 };
 export type RequestOperationStart = { preflight_id: number; confirmation: string };

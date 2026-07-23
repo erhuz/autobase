@@ -1,0 +1,39 @@
+---
+- name: Verify isolated restore and PITR contracts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check isolation, fixed restore, PITR, and final authority guards
+      ansible.builtin.assert:
+        that:
+          - native_restore in playbook
+          - fixed_operations in playbook
+          - explicit_isolation in playbook
+          - separate_names in playbook
+          - target_inventory in playbook
+          - cloud_provisioning_disabled in playbook
+          - clean_restore in playbook
+          - fixed_command in playbook
+          - latest_only in playbook
+          - pitr_time in playbook
+          - dcs_verification in playbook
+          - recovery_verification in playbook
+          - backup_verification in playbook
+          - arbitrary_shell not in playbook
+      vars:
+        playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/restore_pgcluster.yml') }}"
+        native_restore: "ansible.builtin.import_playbook: deploy_pgcluster.yml"
+        fixed_operations: "recovery_operation in ['restore', 'pitr']"
+        explicit_isolation: recovery_isolated | bool
+        separate_names: restore_source_cluster_name != restore_target_cluster_name
+        target_inventory: "difference(groups.get('postgres_cluster', []))"
+        cloud_provisioning_disabled: cloud_provider | length == 0
+        clean_restore: pgbackrest_patroni_cluster_clean_bootstrap | bool
+        fixed_command: "^/usr/bin/pgbackrest --stanza=[A-Za-z0-9_-]+"
+        latest_only: "'--type=' not in pgbackrest_patroni_cluster_restore_command"
+        pitr_time: "'--target=' + recovery_target_time"
+        dcs_verification: Read recovered Patroni DCS membership
+        recovery_verification: Verify recovered PostgreSQL left recovery
+        backup_verification: Verify source pgBackRest repository
+        arbitrary_shell: ansible.builtin.shell
