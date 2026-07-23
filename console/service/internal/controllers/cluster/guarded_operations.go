@@ -167,7 +167,7 @@ func (h *guardedOperationsHandler) HandleOperation(param clusterapi.PostClusters
 
 func supportedOperationType(operationType string) bool {
 	switch operationType {
-	case storage.OperationTypeSwitchover, storage.OperationTypeReload, storage.OperationTypeRollingRestart,
+	case storage.OperationTypeSwitchover, storage.OperationTypeReload, storage.OperationTypeRollingRestart, storage.OperationTypeReplicaReinit,
 		storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:
 		return true
 	default:
@@ -181,6 +181,8 @@ func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterIn
 		return h.switchoverPreflightState(ctx, clusterInfo, target)
 	case storage.OperationTypeReload, storage.OperationTypeRollingRestart:
 		return h.maintenancePreflightState(ctx, clusterInfo, operationType)
+	case storage.OperationTypeReplicaReinit:
+		return h.replicaReinitPreflightState(ctx, clusterInfo, target)
 	case storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:
 		return h.queryAnalyticsPreflightState(ctx, clusterInfo, operationType)
 	default:
@@ -196,6 +198,9 @@ func (h *guardedOperationsHandler) operationInputs(ctx context.Context, clusterI
 	case storage.OperationTypeReload, storage.OperationTypeRollingRestart:
 		envs, extraVars, playbook, err := h.maintenanceOperationInputs(ctx, clusterInfo, operationType, desired)
 		return envs, extraVars, playbook, err
+	case storage.OperationTypeReplicaReinit:
+		envs, extraVars, err := h.replicaReinitOperationInputs(ctx, clusterInfo, desired)
+		return envs, extraVars, replicaReinitPlaybook, err
 	case storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:
 		state, _ := queryAnalyticsState(operationType)
 		envs, extraVars, err := h.queryAnalyticsOperationInputs(ctx, clusterInfo, state)

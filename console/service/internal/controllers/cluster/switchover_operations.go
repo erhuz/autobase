@@ -127,14 +127,22 @@ func (h *guardedOperationsHandler) switchoverPreflightState(ctx context.Context,
 }
 
 func operationTarget(operationType string, desired []byte) (string, error) {
-	if operationType != storage.OperationTypeSwitchover {
+	switch operationType {
+	case storage.OperationTypeSwitchover:
+		var state switchoverDesired
+		if err := json.Unmarshal(desired, &state); err != nil || state.Target == "" {
+			return "", errors.New("switchover target is required")
+		}
+		return state.Target, nil
+	case storage.OperationTypeReplicaReinit:
+		var state replicaReinitDesired
+		if err := json.Unmarshal(desired, &state); err != nil || state.Target == "" {
+			return "", errors.New("replica reinit target is required")
+		}
+		return state.Target, nil
+	default:
 		return "", nil
 	}
-	var state switchoverDesired
-	if err := json.Unmarshal(desired, &state); err != nil || state.Target == "" {
-		return "", errors.New("switchover target is required")
-	}
-	return state.Target, nil
 }
 
 func (h *guardedOperationsHandler) switchoverOperationInputs(ctx context.Context, clusterInfo *storage.Cluster, desired []byte) ([]string, []byte, error) {

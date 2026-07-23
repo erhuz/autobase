@@ -110,7 +110,7 @@ T6|x|add shared preflight/confirm/launch + operation detail + query enable/disab
 T7|x|build cluster health + operation-center + query-performance UI on existing routes|V16,V17,V19,V20,V26,V34,V42,V43,V44,V45,I.ui.health,I.ui.ops,I.ui.query,I.api.health,I.api.ops,I.api.query
 T8|x|add guarded planned switchover vertical slice|V5,V21,V22,V23,V32,I.op.v1,I.automation
 T9|x|add reload + guarded rolling-restart + PGSM package/config/bootstrap/enable/disable vertical slices|V5,V21,V22,V24,V32,V35,V36,V37,V38,V39,V40,V44,V45,I.op.v1,I.automation,I.automation.query
-T10|.|add guarded replica-reinit vertical slice|V5,V21,V22,V25,V32,I.op.v1,I.automation
+T10|x|add guarded replica-reinit vertical slice|V5,V21,V22,V25,V32,I.op.v1,I.automation
 T11|.|add pgBackRest health, scheduler ownership, manual full/diff backup, restore evidence|V17,V21,V22,V26,V27,V32,I.op.v1,I.authority,I.automation
 T12|.|run v1 safety/query/e2e + stock-upgrade gates; publish backup/upgrade/verify/rollback docs + version set|V10,V12,V13,V14,V15,V32,V35,V37,V39,V40,V41,V42,V43,V44,V45,I.release,I.verify
 T13|.|phase 2 add/remove nodes + supported `config_pgcluster` management|V5,V7,V29,I.automation
@@ -174,3 +174,5 @@ B44|2026-07-23|operation-detail test mock omitted refresh control dispatch hook|
 B45|2026-07-23|new operation views wrapped RTK hooks in callbacks; changed-surface lint failed|V45
 B46|2026-07-23|backup health card omitted retention + freshness policy evidence|V26
 B47|2026-07-23|migration + storage integration packages ran concurrently; storage queried before schema creation|V47
+B48|2026-07-23|standalone replica-reinit syntax gate lacked repo collection layout; FQCN role resolution failed|V47
+B49|2026-07-23|Ansible Galaxy install used read-only default cache despite temp dirs|V45

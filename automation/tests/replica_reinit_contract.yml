@@ -1,0 +1,33 @@
+---
+- name: Verify guarded replica reinitialization contract
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check target, data-loss, source, method, and completion guards
+      ansible.builtin.assert:
+        that:
+          - target in playbook
+          - source in playbook
+          - method in playbook
+          - role_recheck in playbook
+          - destructive_endpoint in playbook
+          - force in playbook
+          - from_leader in playbook
+          - serial_marker in playbook
+          - lag_check in playbook
+          - streaming_check in playbook
+          - arbitrary_command not in playbook
+      vars:
+        playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/reinit_replica.yml') }}"
+        target: replica_reinit_target_name
+        source: replica_reinit_clone_source
+        method: "replica_reinit_clone_method == 'pg_basebackup'"
+        role_recheck: Recheck target is current replica immediately before data loss
+        destructive_endpoint: /reinitialize
+        force: "force: true"
+        from_leader: "from-leader: true"
+        serial_marker: "serial: 1"
+        lag_check: /replica?lag=
+        streaming_check: "replication_state | default('') == 'streaming'"
+        arbitrary_command: ansible.builtin.command

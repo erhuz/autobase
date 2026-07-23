@@ -1,0 +1,181 @@
+---
+- name: vitabaks.autobase.reinit_replica | Refresh topology and guards
+  hosts: postgres_cluster
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Define bind_address
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.bind_address
+      when: bind_address is not defined
+
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Refresh Patroni member role
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/patroni
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: replica_reinit_patroni
+      changed_when: false
+      check_mode: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Refresh Patroni member health
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/health
+        status_code: [200, 503]
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: replica_reinit_health
+      changed_when: false
+      check_mode: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Build current primary group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: replica_reinit_primary
+      loop: "{{ groups['postgres_cluster'] }}"
+      when: hostvars[item].replica_reinit_patroni.json.role | default('') in ['master', 'primary', 'leader']
+      changed_when: false
+      check_mode: false
+      run_once: true
+
+    - name: Build selected replica group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: replica_reinit_target
+      loop: "{{ groups['postgres_cluster'] }}"
+      when:
+        - replica_reinit_target_name in [
+            item,
+            hostvars[item].ansible_hostname | default(''),
+            hostvars[item].hostname | default('')
+          ]
+        - hostvars[item].replica_reinit_patroni.json.role | default('') == 'replica'
+      changed_when: false
+      check_mode: false
+      run_once: true
+
+    - name: Require current replica, healthy source leader, and fixed clone method
+      ansible.builtin.assert:
+        that:
+          - groups.get('replica_reinit_primary', []) | length == 1
+          - groups.get('replica_reinit_target', []) | length == 1
+          - groups['replica_reinit_target'][0] != groups['replica_reinit_primary'][0]
+          - hostvars[groups['replica_reinit_primary'][0]].replica_reinit_health.status == 200
+          - >-
+            replica_reinit_clone_source in [
+              groups['replica_reinit_primary'][0],
+              hostvars[groups['replica_reinit_primary'][0]].ansible_hostname | default(''),
+              hostvars[groups['replica_reinit_primary'][0]].hostname | default('')
+            ]
+          - replica_reinit_clone_method == 'pg_basebackup'
+          - replica_reinit_max_lag_bytes | int > 0
+      run_once: true
+
+- name: vitabaks.autobase.reinit_replica | Reinitialize selected replica
+  hosts: replica_reinit_target
+  serial: 1
+  gather_facts: false
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Recheck target is current replica immediately before data loss
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/patroni
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: replica_reinit_target_state
+      changed_when: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Require target remains replica
+      ansible.builtin.assert:
+        that:
+          - replica_reinit_target_state.json.role | default('') == 'replica'
+
+    - name: Recheck clone source remains healthy leader
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{
+            hostvars[groups['replica_reinit_primary'][0]].patroni_restapi_connect_addr
+            | default(hostvars[groups['replica_reinit_primary'][0]].patroni_bind_address
+            | default(hostvars[groups['replica_reinit_primary'][0]].bind_address, true), true)
+          }}:{{ patroni_restapi_port | default('8008') }}/leader
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      changed_when: false
+      environment:
+        no_proxy: >-
+          {{ hostvars[groups['replica_reinit_primary'][0]].patroni_bind_address
+            | default(hostvars[groups['replica_reinit_primary'][0]].bind_address, true) }}
+
+    - name: Delete local PostgreSQL data and clone from current leader
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/reinitialize
+        method: POST
+        body_format: json
+        body:
+          force: true
+          from-leader: true
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      changed_when: true
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Wait for streaming replica within lag policy
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/replica?lag={{ replica_reinit_max_lag_bytes }}
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: replica_reinit_replica_check
+      until: replica_reinit_replica_check.status == 200
+      retries: 900
+      delay: 2
+      changed_when: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Verify replication state is streaming
+      ansible.builtin.uri:
+        url: >-
+          {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
+            | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
+            | default('8008') }}/patroni
+        status_code: 200
+        ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
+      register: replica_reinit_final_state
+      changed_when: false
+      environment:
+        no_proxy: "{{ patroni_bind_address | default(bind_address, true) }}"
+
+    - name: Require replica streaming after reinitialization
+      ansible.builtin.assert:
+        that:
+          - replica_reinit_final_state.json.role | default('') == 'replica'
+          - replica_reinit_final_state.json.replication_state | default('') == 'streaming'
