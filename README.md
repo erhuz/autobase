@@ -10,7 +10,7 @@
 [![Molecule](https://github.com/autobase-tech/autobase/actions/workflows/molecule.yml/badge.svg)](https://github.com/autobase-tech/autobase/actions/workflows/molecule.yml)
 [![GitHub license](https://img.shields.io/github/license/autobase-tech/autobase)](https://github.com/autobase-tech/autobase/blob/main/LICENSE)
 
-Autobase is an Internal Database Platform for PostgreSQL, bringing the managed database experience of DBaaS into your own infrastructure.
+This repository is a fork of [Autobase](https://github.com/autobase-tech/autobase), focused on extended PostgreSQL database management.
 
 Create and manage production-ready, highly available PostgreSQL clusters. Autobase simplifies deployment, reduces operational costs, and makes database management accessible, even for teams without specialized expertise.
 
