@@ -71,7 +71,7 @@ services:
       - caddy
 
   autobase-console-db:
-    image: autobase/console_db:2.8.0
+    image: ghcr.io/erhuz/console_db:latest
     container_name: autobase-console-db
     healthcheck:
       test: pg_isready -U postgres -h 127.0.0.1

@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   management-v1:
@@ -43,6 +44,7 @@ jobs:
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           VERSION_PATTERN="[0-9]\+\.[0-9]\+\.[0-9]\+"
+          IMAGE_TAG_PATTERN="[[:alnum:]_.-]\+"
 
           # Update galaxy.yml version
           sed -i "s/^version:.*/version: ${TAG}/" \
@@ -53,39 +55,39 @@ jobs:
             automation/README.md
 
           # Update console docker-compose image tags
-          sed -i "s/autobase\/console_api:${VERSION_PATTERN}/autobase\/console_api:${TAG}/g" \
+          sed -i "s#ghcr.io/erhuz/console_api:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_api:${TAG}#g" \
             console/docker-compose.yml
-          sed -i "s/autobase\/console_ui:${VERSION_PATTERN}/autobase\/console_ui:${TAG}/g" \
+          sed -i "s#ghcr.io/erhuz/console_ui:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_ui:${TAG}#g" \
             console/docker-compose.yml
-          sed -i "s/autobase\/console_db:${VERSION_PATTERN}/autobase\/console_db:${TAG}/g" \
+          sed -i "s#ghcr.io/erhuz/console_db:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_db:${TAG}#g" \
             console/docker-compose.yml
 
-          sed -i "s/autobase\/console_api:${VERSION_PATTERN}/autobase\/console_api:${TAG}/g" \
+          sed -i "s#ghcr.io/erhuz/console_api:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_api:${TAG}#g" \
             console/docker-compose.caddy.yml
-          sed -i "s/autobase\/console_ui:${VERSION_PATTERN}/autobase\/console_ui:${TAG}/g" \
+          sed -i "s#ghcr.io/erhuz/console_ui:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_ui:${TAG}#g" \
             console/docker-compose.caddy.yml
-          sed -i "s/autobase\/console_db:${VERSION_PATTERN}/autobase\/console_db:${TAG}/g" \
+          sed -i "s#ghcr.io/erhuz/console_db:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_db:${TAG}#g" \
             console/docker-compose.caddy.yml
 
           sed -i "s/autobase\/console_api_ee:${VERSION_PATTERN}/autobase\/console_api_ee:${TAG}/g" \
             console/docker-compose.enterprise.yml
           sed -i "s/autobase\/console_ui_ee:${VERSION_PATTERN}/autobase\/console_ui_ee:${TAG}/g" \
             console/docker-compose.enterprise.yml
-          sed -i "s/autobase\/console_db:${VERSION_PATTERN}/autobase\/console_db:${TAG}/g" \
+          sed -i "s#ghcr.io/erhuz/console_db:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_db:${TAG}#g" \
             console/docker-compose.enterprise.yml
 
           sed -i "s/autobase\/console_api_ee:${VERSION_PATTERN}/autobase\/console_api_ee:${TAG}/g" \
             console/docker-compose.enterprise.ssl.yml
           sed -i "s/autobase\/console_ui_ee:${VERSION_PATTERN}/autobase\/console_ui_ee:${TAG}/g" \
             console/docker-compose.enterprise.ssl.yml
-          sed -i "s/autobase\/console_db:${VERSION_PATTERN}/autobase\/console_db:${TAG}/g" \
+          sed -i "s#ghcr.io/erhuz/console_db:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_db:${TAG}#g" \
             console/docker-compose.enterprise.ssl.yml
 
           # Update console service VERSION file
           echo "${TAG}" > console/service/VERSION
 
           # Update console service README version
-          sed -i "s/autobase\/automation:${VERSION_PATTERN}/autobase\/automation:${TAG}/g" \
+          sed -i "s#ghcr.io/erhuz/automation:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/automation:${TAG}#g" \
             console/service/README.md
 
           # Update swagger.yaml version
@@ -93,7 +95,7 @@ jobs:
             console/service/api/swagger.yaml
 
           # Update config.go version
-          sed -i "s/autobase\/automation:${VERSION_PATTERN}/autobase\/automation:${TAG}/g" \
+          sed -i "s#ghcr.io/erhuz/automation:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/automation:${TAG}#g" \
             console/service/internal/configuration/config.go
 
           # Update package.json version
@@ -144,9 +146,8 @@ jobs:
         uses: docker/setup-qemu-action@v4
 
       - name: Build and Push release image
-        if: ${{ env.DOCKER_REGISTRY_USER != '' && env.DOCKER_REGISTRY_PASSWORD != '' }}
         run: make docker-push
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-          DOCKER_REGISTRY_USER: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_REGISTRY_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_REGISTRY_USER: ${{ github.actor }}
+          DOCKER_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

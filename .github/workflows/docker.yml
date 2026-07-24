@@ -9,6 +9,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -61,9 +65,9 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
 
       - name: Build and Push latest image
-        if: ${{ github.event_name != 'pull_request' && env.DOCKER_REGISTRY_USER != '' && env.DOCKER_REGISTRY_PASSWORD != '' }}
+        if: ${{ github.event_name != 'pull_request' }}
         run: make docker-push
         env:
           TAG: ${{ env.TAG }}
-          DOCKER_REGISTRY_USER: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_REGISTRY_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_REGISTRY_USER: ${{ github.actor }}
+          DOCKER_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

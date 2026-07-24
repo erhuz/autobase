@@ -2,6 +2,7 @@
   "schema": 1,
   "name": "management-v1",
   "source_baseline": "2.9.0",
+  "image_registry": "ghcr.io/erhuz",
   "components": {
     "ui": {
       "path": "console/ui",

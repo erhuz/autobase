@@ -1,6 +1,6 @@
 ## —— Docker —————————————————————————————————————————————————————————————————————————————————————
 TAG ?= local
-DOCKER_REGISTRY ?= autobase
+DOCKER_REGISTRY ?= ghcr.io/erhuz
 DOCKER_BUILD_PLATFORM ?= linux/amd64
 DOCKER_PLATFORMS ?= linux/amd64,linux/arm64
 DOCKER_BUILDX_BUILDER ?= autobase-builder
@@ -72,10 +72,10 @@ docker-build-console: ## Build console image (all services)
 	docker buildx build --no-cache --platform $(DOCKER_BUILD_PLATFORM) --tag console:$(SANITIZED_TAG) --file console/Dockerfile --load .
 
 .PHONY: docker-login docker-push docker-push-console-ui docker-push-console-api docker-push-console-db docker-push-console
-docker-login: ## Login to Dockerhub
-	echo "$(DOCKER_REGISTRY_PASSWORD)" | docker login --username "$(DOCKER_REGISTRY_USER)" --password-stdin
+docker-login: ## Login to GHCR
+	echo "$(DOCKER_REGISTRY_PASSWORD)" | docker login ghcr.io --username "$(DOCKER_REGISTRY_USER)" --password-stdin
 
-docker-push: ## Build and Push all images to Dockerhub (example: make docker-push TAG=my_tag DOCKER_REGISTRY=my_repo DOCKER_REGISTRY_USER="my_username" DOCKER_REGISTRY_PASSWORD="my_password")
+docker-push: ## Build and Push all images to GHCR
 	$(MAKE) docker-buildx-setup
 	$(MAKE) docker-login
 	$(MAKE) docker-push-automation
@@ -84,23 +84,23 @@ docker-push: ## Build and Push all images to Dockerhub (example: make docker-pus
 	$(MAKE) docker-push-console-db
 	$(MAKE) docker-push-console
 
-docker-push-automation: ## Build and Push automation to Dockerhub
+docker-push-automation: ## Build and Push automation to GHCR
 	@echo "Build and Push automation docker image with tag $(TAG) (sanitized as $(SANITIZED_TAG))";
 	docker buildx build --no-cache --platform $(DOCKER_PLATFORMS) --tag $(DOCKER_REGISTRY)/automation:$(SANITIZED_TAG) --file automation/Dockerfile --push .
 
-docker-push-console-ui: ## Build and Push console ui image to Dockerhub
+docker-push-console-ui: ## Build and Push console ui image to GHCR
 	@echo "Build and Push console ui docker image with tag $(TAG) (sanitized as $(SANITIZED_TAG))"
 	docker buildx build --no-cache --platform $(DOCKER_PLATFORMS) --tag $(DOCKER_REGISTRY)/console_ui:$(SANITIZED_TAG) --file console/ui/Dockerfile --push .
 
-docker-push-console-api: ## Build and Push console api image to Dockerhub
+docker-push-console-api: ## Build and Push console api image to GHCR
 	@echo "Build and Push console api docker image with tag $(TAG) (sanitized as $(SANITIZED_TAG))"
 	docker buildx build --no-cache --platform $(DOCKER_PLATFORMS) --tag $(DOCKER_REGISTRY)/console_api:$(SANITIZED_TAG) --file console/service/Dockerfile --push .
 
-docker-push-console-db: ## Build and Push console db image to Dockerhub
+docker-push-console-db: ## Build and Push console db image to GHCR
 	@echo "Build and Push console db docker image with tag $(TAG) (sanitized as $(SANITIZED_TAG))"
 	docker buildx build --no-cache --platform $(DOCKER_PLATFORMS) --tag $(DOCKER_REGISTRY)/console_db:$(SANITIZED_TAG) --file console/db/Dockerfile --push .
 
-docker-push-console: ## Build and Push console image to Dockerhub (all services)
+docker-push-console: ## Build and Push console image to GHCR (all services)
 	@echo "Build and Push console docker image with tag $(TAG) (sanitized as $(SANITIZED_TAG))"
 	docker buildx build --no-cache --platform $(DOCKER_PLATFORMS) --tag $(DOCKER_REGISTRY)/console:$(SANITIZED_TAG) --file console/Dockerfile --push .
 

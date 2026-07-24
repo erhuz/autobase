@@ -49,12 +49,12 @@ To run the Autobase Console, execute the following command:
 docker run -d --name autobase-console \
   --publish 80:80 \
   --env PG_CONSOLE_AUTHORIZATION_TOKEN=secret_token \
-  --env PG_CONSOLE_DOCKER_IMAGE=autobase/automation:latest \
+  --env PG_CONSOLE_DOCKER_IMAGE=ghcr.io/erhuz/automation:latest \
   --volume console_postgres:/var/lib/postgresql \
   --volume /var/run/docker.sock:/var/run/docker.sock \
   --volume /tmp/ansible:/tmp/ansible \
   --restart=unless-stopped \
-  autobase/console:latest
+  ghcr.io/erhuz/console:latest
 ```
 
 Refer to the [Deployment](https://autobase.tech/docs/category/deployment) section to learn more about the different deployment methods.

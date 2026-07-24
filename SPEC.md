@@ -43,6 +43,7 @@ automation: API runner → existing inventory + supported Autobase playbooks/rol
 automation.query: signed package + secure PGSM config + scoped read-only role + serial HA rollout.
 authority: Patroni/DCS → live topology; routing target checks → traffic state; pgBackRest → backup/WAL/lock state.
 release: stock `2.9.0` DB/config fixture → migrate → verify data + secrets metadata + zero managed-cluster mutation.
+image: main → public `ghcr.io/erhuz/{automation,console_ui,console_api,console_db,console}:latest`; tag `<tag>` → same:`<tag>`.
 verify: Go unit/integration + UI unit/e2e + migration fixture + operation safety contract + `git diff --check`.
 
 ## §V
@@ -98,6 +99,7 @@ V48: query-performance filters have programmatic labels + keyboard-operable nati
 V49: query-performance refresh/filter change advances window end; stale window refetch ⊥.
 V50: operation `finished` timestamp ∃ iff status ∈ `succeeded,failed,cancelled`.
 V51: ∀ supported operation type → preflight persistence + schema constraints accept it; integration test exercises ≥1 non-analytics type against real schema.
+V52: I.image publish auth = GitHub Actions `GITHUB_TOKEN` + `packages:write`; anonymous pull succeeds; Docker Hub publish ⊥; current refs use I.image; stock `2.9.0` fixture unchanged.
 
 ## §T
 
@@ -126,6 +128,7 @@ T21|x|add query-performance UI + status/filter/trend/detail tests|V34,V42,V43,V4
 T22|x|add guarded PGSM enable/disable preflight + serial HA operation|V4,V5,V19,V20,V21,V22,V24,V34,V36,V37,V38,V39,V40,V44,V45,V50,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query,I.verify
 T23|x|widen `operation_preflights.operation_type` constraint to all supported types + non-analytics preflight integration test|V4,V32,V51,I.db,I.api.preflight
 T24|x|guard operations-list `finished` to terminal states|V50,I.api.ops
+T25|x|cut image publishing + current pulls to public GHCR|V11,V15,V52,I.image,I.release,I.verify
 
 ## §B
 
