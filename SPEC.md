@@ -125,7 +125,7 @@ T20|x|add all-node PGSM collector + query-performance APIs|V34,V39,V40,V41,V42,V
 T21|x|add query-performance UI + status/filter/trend/detail tests|V34,V42,V43,V44,V45,V48,V49,I.ui.query,I.api.query,I.verify
 T22|x|add guarded PGSM enable/disable preflight + serial HA operation|V4,V5,V19,V20,V21,V22,V24,V34,V36,V37,V38,V39,V40,V44,V45,V50,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query,I.verify
 T23|x|widen `operation_preflights.operation_type` constraint to all supported types + non-analytics preflight integration test|V4,V32,V51,I.db,I.api.preflight
-T24|.|guard operations-list `finished` to terminal states|V50,I.api.ops
+T24|x|guard operations-list `finished` to terminal states|V50,I.api.ops
 
 ## §B
 

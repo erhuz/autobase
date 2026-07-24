@@ -172,6 +172,28 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	operations, _, err := store.GetOperations(ctx, &GetOperationsReq{
+		ProjectID: projectID, StartedFrom: time.Time{}, EndedTill: time.Now().Add(time.Hour), ClusterName: &cluster.Name,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var firstFinished, secondFinished *time.Time
+	var firstFound, secondFound bool
+	for _, operation := range operations {
+		if operation.ID == first.ID {
+			firstFound = true
+			firstFinished = operation.Finished
+		}
+		if operation.ID == second.ID {
+			secondFound = true
+			secondFinished = operation.Finished
+		}
+	}
+	if !firstFound || !secondFound || firstFinished == nil || secondFinished != nil {
+		t.Fatalf("operations found: succeeded=%t queued=%t; finished timestamps: succeeded=%v queued=%v",
+			firstFound, secondFound, firstFinished, secondFinished)
+	}
 	healthOperations, err := store.GetClusterHealthOperations(ctx, cluster.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -187,5 +209,20 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 	cancelled := OperationStatusCancelled
 	if _, err = store.UpdateOperation(ctx, &UpdateOperationReq{ID: second.ID, Status: &cancelled}); err != nil {
 		t.Fatal(err)
+	}
+	operations, _, err = store.GetOperations(ctx, &GetOperationsReq{
+		ProjectID: projectID, StartedFrom: time.Time{}, EndedTill: time.Now().Add(time.Hour), ClusterName: &cluster.Name,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondFound = false
+	for _, operation := range operations {
+		if operation.ID == second.ID {
+			secondFound = operation.Finished != nil
+		}
+	}
+	if !secondFound {
+		t.Fatal("cancelled operation has no finished timestamp")
 	}
 }
