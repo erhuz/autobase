@@ -116,7 +116,7 @@ T12|x|run v1 safety/query/e2e + stock-upgrade gates; publish backup/upgrade/veri
 T13|x|phase 2 add/remove nodes + supported `config_pgcluster` management|V5,V7,V29,I.automation
 T14|x|phase 2 rolling updates/upgrades + emergency-failover policy|V5,V7,V29,I.automation
 T15|x|phase 2 isolated restore + PITR workflow|V5,V7,V30,I.automation
-T16|.|phase 3 database, owner, user, role, grant management|V7,V31,I.api.preflight,I.api.run,I.automation
+T16|x|phase 3 database, owner, user, role, grant management|V7,V31,I.api.preflight,I.api.run,I.automation
 T17|.|phase 3 supported extension + PgBouncer pool/limit management|V7,V31,I.api.preflight,I.api.run,I.automation
 T18|x|add PGSM package/config/default-on bootstrap + contract tests|V33,V34,V35,V38,V39,V40,V44,V45,I.automation.query,I.verify
 T19|x|add analytics Console DB schema + migration/storage tests|V12,V13,V14,V40,V41,V42,V44,V45,V46,V47,I.db.query,I.release,I.verify

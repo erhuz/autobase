@@ -1084,7 +1084,7 @@ definitions:
     properties:
       type:
         type: string
-        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update, rolling_update, postgresql_upgrade, emergency_failover, restore, pitr]
+        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update, rolling_update, postgresql_upgrade, emergency_failover, restore, pitr, database_admin]
       target:
         type: string
       params:
@@ -1113,6 +1113,43 @@ definitions:
       recovery_target_time:
         type: string
         format: date-time
+      database_action:
+        type: string
+        enum: [database_present, database_absent, user_present, user_absent, role_present, role_absent, grant_present, grant_absent]
+      database:
+        type: string
+        pattern: '^[a-z_][a-z0-9_]{0,62}$'
+      owner:
+        type: string
+        pattern: '^[a-z_][a-z0-9_]{0,62}$'
+      role:
+        type: string
+        pattern: '^[a-z_][a-z0-9_]{0,62}$'
+      connection_limit:
+        type: integer
+        format: int32
+        minimum: -1
+      object_type:
+        type: string
+        enum: [database, schema, table, sequence]
+      objects:
+        type: array
+        minItems: 1
+        maxItems: 64
+        uniqueItems: true
+        items:
+          type: string
+          pattern: '^[a-z_][a-z0-9_]{0,62}$'
+      schema:
+        type: string
+        pattern: '^[a-z_][a-z0-9_]{0,62}$'
+      privileges:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          enum: [CONNECT, CREATE, TEMPORARY, USAGE, SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER]
 
   Request.PostgreSQLParameter:
     type: object

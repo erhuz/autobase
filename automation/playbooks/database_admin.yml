@@ -1,0 +1,279 @@
+---
+- name: vitabaks.autobase.database_admin | Validate fixed request
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: always
+  vars:
+    database_admin_identifier_pattern: '^[a-z_][a-z0-9_]{0,62}$'
+    database_admin_supported_actions:
+      - database_present
+      - database_absent
+      - user_present
+      - user_absent
+      - role_present
+      - role_absent
+      - grant_present
+      - grant_absent
+    database_admin_supported_privileges:
+      database: [CONNECT, CREATE, TEMPORARY]
+      schema: [CREATE, USAGE]
+      table: [DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE]
+      sequence: [SELECT, UPDATE, USAGE]
+  tasks:
+    - name: Require supported fixed database administration inputs
+      ansible.builtin.assert:
+        that:
+          - database_admin_action in database_admin_supported_actions
+          - database_admin_primary in groups.get('postgres_cluster', [])
+          - database_admin_database | length == 0 or database_admin_database is match(database_admin_identifier_pattern)
+          - database_admin_owner | length == 0 or database_admin_owner is match(database_admin_identifier_pattern)
+          - database_admin_role | length == 0 or database_admin_role is match(database_admin_identifier_pattern)
+          - database_admin_schema | length == 0 or database_admin_schema is match(database_admin_identifier_pattern)
+          - database_admin_objects | unique | length == database_admin_objects | length
+          - database_admin_objects | select('match', database_admin_identifier_pattern) | list | length == database_admin_objects | length
+          - database_admin_privileges | unique | length == database_admin_privileges | length
+          - database_admin_action != 'database_present' or database_admin_database | length > 0
+          - database_admin_action != 'database_present' or database_admin_owner | length > 0
+          - database_admin_action != 'database_present' or database_admin_role | length == 0
+          - database_admin_action != 'database_present' or database_admin_connection_limit >= -2
+          - database_admin_action != 'database_absent' or database_admin_database | length > 0
+          - database_admin_action != 'database_absent' or database_admin_owner | length == 0
+          - database_admin_action != 'database_absent' or database_admin_connection_limit == -2
+          - database_admin_action not in ['user_present', 'user_absent', 'role_present', 'role_absent'] or database_admin_role | length > 0
+          - database_admin_action not in ['user_present', 'user_absent', 'role_present', 'role_absent'] or database_admin_database | length == 0
+          - database_admin_action not in ['user_present', 'role_present'] or database_admin_connection_limit >= -2
+          - database_admin_action not in ['user_absent', 'role_absent'] or database_admin_connection_limit == -2
+          - database_admin_action not in ['grant_present', 'grant_absent'] or database_admin_database | length > 0
+          - database_admin_action not in ['grant_present', 'grant_absent'] or database_admin_role | length > 0
+          - database_admin_action not in ['grant_present', 'grant_absent'] or database_admin_object_type in database_admin_supported_privileges
+          - database_admin_action not in ['grant_present', 'grant_absent'] or database_admin_privileges | length > 0
+          - >-
+            database_admin_action not in ['grant_present', 'grant_absent'] or
+            database_admin_privileges |
+            difference(database_admin_supported_privileges[database_admin_object_type]) | length == 0
+          - database_admin_action not in ['grant_present', 'grant_absent'] or database_admin_connection_limit == -2
+          - database_admin_action not in ['grant_present', 'grant_absent'] or database_admin_object_type != 'database' or database_admin_objects | length == 0
+          - database_admin_action not in ['grant_present', 'grant_absent'] or database_admin_object_type != 'database' or database_admin_schema | length == 0
+          - database_admin_action not in ['grant_present', 'grant_absent'] or database_admin_object_type == 'database' or database_admin_objects | length > 0
+          - database_admin_action not in ['grant_present', 'grant_absent'] or database_admin_object_type != 'schema' or database_admin_schema | length == 0
+          - >-
+            database_admin_action not in ['grant_present', 'grant_absent'] or
+            database_admin_object_type not in ['table', 'sequence'] or
+            database_admin_schema | length > 0
+
+    - name: Select database administration primary
+      ansible.builtin.add_host:
+        name: "{{ database_admin_primary }}"
+        groups: database_admin_before
+      changed_when: false
+
+- name: vitabaks.autobase.database_admin | Capture current catalog state
+  hosts: database_admin_before
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tags: database_admin
+  tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Capture current database state
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: postgres
+        query: >-
+          SELECT d.datname, r.rolname AS owner, d.datconnlimit AS connection_limit
+          FROM pg_database d JOIN pg_roles r ON r.oid = d.datdba
+          WHERE d.datname = %(database)s
+        named_args:
+          database: "{{ database_admin_database }}"
+      changed_when: false
+      when: database_admin_action in ['database_present', 'database_absent']
+
+    - name: Capture current role state
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: postgres
+        query: >-
+          SELECT rolname, rolcanlogin, rolconnlimit AS connection_limit
+          FROM pg_roles WHERE rolname = %(role)s
+        named_args:
+          role: "{{ database_admin_role }}"
+      changed_when: false
+      when: database_admin_action in ['user_present', 'user_absent', 'role_present', 'role_absent']
+
+    - name: Capture current database privileges
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: "{{ database_admin_database }}"
+        query: SELECT has_database_privilege(%(role)s, %(object)s, %(privilege)s) AS granted
+        named_args:
+          role: "{{ database_admin_role }}"
+          object: "{{ database_admin_database }}"
+          privilege: "{{ item }}"
+      loop: "{{ database_admin_privileges }}"
+      changed_when: false
+      when:
+        - database_admin_action in ['grant_present', 'grant_absent']
+        - database_admin_object_type == 'database'
+
+    - name: Capture current object privileges
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: "{{ database_admin_database }}"
+        query: >-
+          SELECT
+          CASE %(object_type)s
+          WHEN 'schema' THEN has_schema_privilege(%(role)s, %(object)s, %(privilege)s)
+          WHEN 'table' THEN has_table_privilege(%(role)s, %(object)s, %(privilege)s)
+          WHEN 'sequence' THEN has_sequence_privilege(%(role)s, %(object)s, %(privilege)s)
+          END AS granted
+        named_args:
+          role: "{{ database_admin_role }}"
+          object_type: "{{ database_admin_object_type }}"
+          object: "{{ (database_admin_schema + '.' if database_admin_schema | length > 0 else '') + item.0 }}"
+          privilege: "{{ item.1 }}"
+      loop: "{{ database_admin_objects | product(database_admin_privileges) | list }}"
+      changed_when: false
+      when:
+        - database_admin_action in ['grant_present', 'grant_absent']
+        - database_admin_object_type != 'database'
+
+- name: vitabaks.autobase.database_admin | Apply native database administration role
+  ansible.builtin.import_playbook: config_pgcluster.yml
+
+- name: vitabaks.autobase.database_admin | Verify live catalog state
+  hosts: primary
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tags: database_admin
+  tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Verify database state
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: postgres
+        query: >-
+          SELECT count(*)::int AS matches
+          FROM pg_database d JOIN pg_roles r ON r.oid = d.datdba
+          WHERE d.datname = %(database)s
+          AND (%(action)s = 'database_absent' OR r.rolname = %(owner)s)
+          AND (%(connection_limit)s::int = -2 OR d.datconnlimit = %(connection_limit)s::int)
+        named_args:
+          action: "{{ database_admin_action }}"
+          database: "{{ database_admin_database }}"
+          owner: "{{ database_admin_owner }}"
+          connection_limit: "{{ database_admin_connection_limit }}"
+      register: database_admin_database_check
+      changed_when: false
+      failed_when: >-
+        database_admin_database_check.query_result[0].matches | int !=
+        (0 if database_admin_action == 'database_absent' else 1)
+      when: database_admin_action in ['database_present', 'database_absent']
+
+    - name: Verify role state
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: postgres
+        query: >-
+          SELECT count(*)::int AS matches FROM pg_roles
+          WHERE rolname = %(role)s
+          AND (%(action)s IN ('user_absent', 'role_absent')
+            OR rolcanlogin = %(login)s::boolean)
+          AND (%(connection_limit)s::int = -2 OR rolconnlimit = %(connection_limit)s::int)
+        named_args:
+          action: "{{ database_admin_action }}"
+          role: "{{ database_admin_role }}"
+          login: "{{ database_admin_action == 'user_present' }}"
+          connection_limit: "{{ database_admin_connection_limit }}"
+      register: database_admin_role_check
+      changed_when: false
+      failed_when: >-
+        database_admin_role_check.query_result[0].matches | int !=
+        (0 if database_admin_action in ['user_absent', 'role_absent'] else 1)
+      when: database_admin_action in ['user_present', 'user_absent', 'role_present', 'role_absent']
+
+    - name: Verify database privileges
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: "{{ database_admin_database }}"
+        query: SELECT has_database_privilege(%(role)s, %(object)s, %(privilege)s) AS granted
+        named_args:
+          role: "{{ database_admin_role }}"
+          object: "{{ database_admin_database }}"
+          privilege: "{{ item }}"
+      loop: "{{ database_admin_privileges }}"
+      register: database_admin_database_grant_check
+      changed_when: false
+      failed_when: >-
+        database_admin_database_grant_check.query_result[0].granted | bool !=
+        (database_admin_action == 'grant_present')
+      when:
+        - database_admin_action in ['grant_present', 'grant_absent']
+        - database_admin_object_type == 'database'
+
+    - name: Verify object privileges
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: "{{ database_admin_database }}"
+        query: >-
+          SELECT
+          CASE %(object_type)s
+          WHEN 'schema' THEN has_schema_privilege(%(role)s, %(object)s, %(privilege)s)
+          WHEN 'table' THEN has_table_privilege(%(role)s, %(object)s, %(privilege)s)
+          WHEN 'sequence' THEN has_sequence_privilege(%(role)s, %(object)s, %(privilege)s)
+          END AS granted
+        named_args:
+          role: "{{ database_admin_role }}"
+          object_type: "{{ database_admin_object_type }}"
+          object: "{{ (database_admin_schema + '.' if database_admin_schema | length > 0 else '') + item.0 }}"
+          privilege: "{{ item.1 }}"
+      loop: "{{ database_admin_objects | product(database_admin_privileges) | list }}"
+      register: database_admin_object_grant_check
+      changed_when: false
+      failed_when: >-
+        database_admin_object_grant_check.query_result[0].granted | bool !=
+        (database_admin_action == 'grant_present')
+      when:
+        - database_admin_action in ['grant_present', 'grant_absent']
+        - database_admin_object_type != 'database'

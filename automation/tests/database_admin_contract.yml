@@ -1,0 +1,37 @@
+---
+- name: Verify guarded database administration contracts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check fixed inputs, native roles, current-state capture, and live verification
+      ansible.builtin.assert:
+        that:
+          - native_config in playbook
+          - fixed_actions in playbook
+          - primary_guard in playbook
+          - identifier_allowlist in playbook
+          - privilege_allowlist in playbook
+          - database_current_state in playbook
+          - role_current_state in playbook
+          - grant_current_state in playbook
+          - database_verification in playbook
+          - role_verification in playbook
+          - grant_verification in playbook
+          - arbitrary_shell not in playbook
+          - password_input not in playbook
+      vars:
+        playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/database_admin.yml') }}"
+        native_config: "ansible.builtin.import_playbook: config_pgcluster.yml"
+        fixed_actions: "database_admin_supported_actions:"
+        primary_guard: "database_admin_primary in groups.get('postgres_cluster', [])"
+        identifier_allowlist: "^[a-z_][a-z0-9_]{0,62}$"
+        privilege_allowlist: "database_admin_supported_privileges"
+        database_current_state: Capture current database state
+        role_current_state: Capture current role state
+        grant_current_state: Capture current object privileges
+        database_verification: Verify database state
+        role_verification: Verify role state
+        grant_verification: Verify object privileges
+        arbitrary_shell: ansible.builtin.shell
+        password_input: database_admin_password

@@ -349,7 +349,8 @@ export type RequestOperationPreflight = {
     | 'postgresql_upgrade'
     | 'emergency_failover'
     | 'restore'
-    | 'pitr';
+    | 'pitr'
+    | 'database_admin';
   target?: string;
   params?: {
     postgresql_parameters?: Array<{ option: string; value: string }>;
@@ -357,6 +358,35 @@ export type RequestOperationPreflight = {
     postgresql_version?: number;
     source_cluster?: string;
     recovery_target_time?: string;
+    database_action?:
+      | 'database_present'
+      | 'database_absent'
+      | 'user_present'
+      | 'user_absent'
+      | 'role_present'
+      | 'role_absent'
+      | 'grant_present'
+      | 'grant_absent';
+    database?: string;
+    owner?: string;
+    role?: string;
+    connection_limit?: number;
+    object_type?: 'database' | 'schema' | 'table' | 'sequence';
+    objects?: string[];
+    schema?: string;
+    privileges?: Array<
+      | 'CONNECT'
+      | 'CREATE'
+      | 'TEMPORARY'
+      | 'USAGE'
+      | 'SELECT'
+      | 'INSERT'
+      | 'UPDATE'
+      | 'DELETE'
+      | 'TRUNCATE'
+      | 'REFERENCES'
+      | 'TRIGGER'
+    >;
   };
 };
 export type RequestOperationStart = { preflight_id: number; confirmation: string };

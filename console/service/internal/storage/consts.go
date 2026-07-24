@@ -32,6 +32,7 @@ const (
 	OperationTypeEmergencyFailover     = "emergency_failover"
 	OperationTypeRestore               = "restore"
 	OperationTypePITR                  = "pitr"
+	OperationTypeDatabaseAdmin         = "database_admin"
 
 	ClusterStatusFailed      = "failed"
 	ClusterStatusHealthy     = "healthy"

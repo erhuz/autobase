@@ -57,7 +57,9 @@ jobs:
             internal/controllers/cluster/phase2_operations.go \
             internal/controllers/cluster/phase2_operations_test.go \
             internal/controllers/cluster/recovery_operations.go \
-            internal/controllers/cluster/recovery_operations_test.go)"
+            internal/controllers/cluster/recovery_operations_test.go \
+            internal/controllers/cluster/database_admin_operations.go \
+            internal/controllers/cluster/database_admin_operations_test.go)"
           PG_CONSOLE_TEST_DSN="postgres://postgres:test@127.0.0.1:5432/pg_console?sslmode=disable" \
             go test -mod=readonly ./migrations
           PG_CONSOLE_TEST_DSN="postgres://postgres:test@127.0.0.1:5432/pg_console?sslmode=disable" \
@@ -90,6 +92,7 @@ jobs:
           ansible-playbook automation/tests/lifecycle_operations_contract.yml
           ansible-playbook automation/tests/phase2_operations_contract.yml
           ansible-playbook automation/tests/restore_pgcluster_contract.yml
+          ansible-playbook automation/tests/database_admin_contract.yml
 
   ui:
     runs-on: ubuntu-latest

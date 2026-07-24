@@ -180,7 +180,7 @@ func supportedOperationType(operationType string) bool {
 		storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable,
 		storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate,
 		storage.OperationTypeRollingUpdate, storage.OperationTypePostgreSQLUpgrade, storage.OperationTypeEmergencyFailover,
-		storage.OperationTypeRestore, storage.OperationTypePITR:
+		storage.OperationTypeRestore, storage.OperationTypePITR, storage.OperationTypeDatabaseAdmin:
 		return true
 	default:
 		return false
@@ -205,6 +205,8 @@ func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterIn
 		return h.phase2PreflightState(ctx, clusterInfo, operationType, target, params)
 	case storage.OperationTypeRestore, storage.OperationTypePITR:
 		return h.recoveryPreflightState(ctx, clusterInfo, operationType, target, params)
+	case storage.OperationTypeDatabaseAdmin:
+		return h.databaseAdminPreflightState(ctx, clusterInfo, target, params)
 	default:
 		return nil, errors.New("unsupported operation type")
 	}
@@ -237,6 +239,9 @@ func (h *guardedOperationsHandler) operationInputs(ctx context.Context, clusterI
 	case storage.OperationTypeRestore, storage.OperationTypePITR:
 		envs, extraVars, err := h.recoveryOperationInputs(ctx, clusterInfo, operationType, desired)
 		return envs, extraVars, recoveryPlaybook, err
+	case storage.OperationTypeDatabaseAdmin:
+		envs, extraVars, err := h.databaseAdminOperationInputs(ctx, clusterInfo, desired)
+		return envs, extraVars, databaseAdminPlaybook, err
 	default:
 		return nil, nil, "", errors.New("unsupported operation type")
 	}
