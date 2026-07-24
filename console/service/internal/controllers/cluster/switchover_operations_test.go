@@ -19,11 +19,13 @@ import (
 
 func switchoverFixture() (*guardedOperationStorage, string) {
 	now := time.Now().UTC()
+	credentialID := int64(7)
 	leaderLag, candidateLag, replicaLag := int64(0), int64(10), int64(2)
 	flags := storage.SetPatroniConnectStatus(0, 1)
 	store := &guardedOperationStorage{
 		cluster: &storage.Cluster{
 			ID: 5, ProjectID: 3, Name: "cluster-1", Status: storage.ClusterStatusHealthy, Flags: *flags,
+			SecretID:  &credentialID,
 			ExtraVars: []byte(`{"dcs_type":"etcd","patroni_maximum_lag_on_failover":100}`),
 			Inventory: []byte(`{"all":{"children":{"etcd_cluster":{"hosts":{"dcs-1":{},"dcs-2":{},"dcs-3":{}}}}}}`),
 			ConnectionInfo: map[string]any{

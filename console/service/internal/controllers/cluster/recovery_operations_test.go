@@ -50,9 +50,11 @@ func (s *recoveryOperationStorage) GetBackupEvidence(_ context.Context, id int64
 func recoveryFixture() (*recoveryOperationStorage, time.Time) {
 	store, _ := backupFixture()
 	now := time.Now().UTC().Truncate(time.Second)
+	credentialID := int64(7)
 	walContinuous := true
 	store.cluster = &storage.Cluster{
 		ID: 5, ProjectID: 3, Name: "recovery-cluster",
+		SecretID:  &credentialID,
 		ExtraVars: []byte(`{"pgbackrest_install":true,"recovery_target":true}`),
 		Inventory: []byte(`{
 			"all":{"children":{

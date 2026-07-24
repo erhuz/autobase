@@ -188,31 +188,38 @@ func supportedOperationType(operationType string) bool {
 	}
 }
 
-func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterInfo *storage.Cluster, operationType, target string, params []byte) (*guardedPreflight, error) {
+func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterInfo *storage.Cluster, operationType, target string, params []byte) (state *guardedPreflight, err error) {
 	switch operationType {
 	case storage.OperationTypeSwitchover:
-		return h.switchoverPreflightState(ctx, clusterInfo, target)
+		state, err = h.switchoverPreflightState(ctx, clusterInfo, target)
 	case storage.OperationTypeReload, storage.OperationTypeRollingRestart:
-		return h.maintenancePreflightState(ctx, clusterInfo, operationType)
+		state, err = h.maintenancePreflightState(ctx, clusterInfo, operationType)
 	case storage.OperationTypeReplicaReinit:
-		return h.replicaReinitPreflightState(ctx, clusterInfo, target)
+		state, err = h.replicaReinitPreflightState(ctx, clusterInfo, target)
 	case storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff:
-		return h.backupPreflightState(ctx, clusterInfo, operationType)
+		state, err = h.backupPreflightState(ctx, clusterInfo, operationType)
 	case storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:
-		return h.queryAnalyticsPreflightState(ctx, clusterInfo, operationType)
+		state, err = h.queryAnalyticsPreflightState(ctx, clusterInfo, operationType)
 	case storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate:
-		return h.lifecyclePreflightState(ctx, clusterInfo, operationType, target, params)
+		state, err = h.lifecyclePreflightState(ctx, clusterInfo, operationType, target, params)
 	case storage.OperationTypeRollingUpdate, storage.OperationTypePostgreSQLUpgrade, storage.OperationTypeEmergencyFailover:
-		return h.phase2PreflightState(ctx, clusterInfo, operationType, target, params)
+		state, err = h.phase2PreflightState(ctx, clusterInfo, operationType, target, params)
 	case storage.OperationTypeRestore, storage.OperationTypePITR:
-		return h.recoveryPreflightState(ctx, clusterInfo, operationType, target, params)
+		state, err = h.recoveryPreflightState(ctx, clusterInfo, operationType, target, params)
 	case storage.OperationTypeDatabaseAdmin:
-		return h.databaseAdminPreflightState(ctx, clusterInfo, target, params)
+		state, err = h.databaseAdminPreflightState(ctx, clusterInfo, target, params)
 	case storage.OperationTypeExtensionAdmin, storage.OperationTypePgBouncerAdmin:
-		return h.phase3ServicesPreflightState(ctx, clusterInfo, operationType, target, params)
+		state, err = h.phase3ServicesPreflightState(ctx, clusterInfo, operationType, target, params)
 	default:
 		return nil, errors.New("unsupported operation type")
 	}
+	if err != nil {
+		return nil, err
+	}
+	if _, credentialErr := h.managementCredential(ctx, clusterInfo); credentialErr != nil {
+		state.blockers = append(state.blockers, "management credential attached")
+	}
+	return state, nil
 }
 
 func (h *guardedOperationsHandler) operationInputs(ctx context.Context, clusterInfo *storage.Cluster, operationType string, desired []byte) ([]string, []byte, string, error) {
@@ -254,6 +261,10 @@ func (h *guardedOperationsHandler) operationInputs(ctx context.Context, clusterI
 }
 
 func (h *guardedOperationsHandler) baseOperationInputs(ctx context.Context, clusterInfo *storage.Cluster) ([]string, map[string]any, error) {
+	secretID, err := h.managementCredential(ctx, clusterInfo)
+	if err != nil {
+		return nil, nil, err
+	}
 	extraVars := map[string]any{}
 	if len(clusterInfo.ExtraVars) != 0 {
 		if err := json.Unmarshal(clusterInfo.ExtraVars, &extraVars); err != nil {
@@ -264,23 +275,39 @@ func (h *guardedOperationsHandler) baseOperationInputs(ctx context.Context, clus
 	if len(clusterInfo.Inventory) != 0 {
 		envs = append(envs, "ANSIBLE_INVENTORY_JSON="+base64.StdEncoding.EncodeToString(clusterInfo.Inventory))
 	}
-	if clusterInfo.SecretID != nil {
-		secretValues, location, err := getSecretEnvs(ctx, h.log, h.db, *clusterInfo.SecretID, h.cfg.EncryptionKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		if location == ExtraVarsParamLocation {
-			for _, value := range secretValues {
-				parts := strings.SplitN(value, "=", 2)
-				if len(parts) == 2 {
-					extraVars[parts[0]] = parts[1]
-				}
+	secretValues, location, err := getSecretEnvs(ctx, h.log, h.db, secretID, h.cfg.EncryptionKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	if location == ExtraVarsParamLocation {
+		for _, value := range secretValues {
+			parts := strings.SplitN(value, "=", 2)
+			if len(parts) == 2 {
+				extraVars[parts[0]] = parts[1]
 			}
-		} else {
-			envs = append(envs, secretValues...)
 		}
+	} else {
+		envs = append(envs, secretValues...)
 	}
 	return envs, extraVars, nil
+}
+
+func (h *guardedOperationsHandler) managementCredential(ctx context.Context, clusterInfo *storage.Cluster) (int64, error) {
+	if clusterInfo.SecretID == nil {
+		return 0, errors.New("management credential is not attached")
+	}
+	secret, err := h.db.GetSecret(ctx, *clusterInfo.SecretID)
+	if err != nil {
+		return 0, err
+	}
+	if secret == nil {
+		return 0, errors.New("management credential is unavailable")
+	}
+	if secret.ProjectID != clusterInfo.ProjectID ||
+		secret.Type != string(models.SecretTypeSSHKey) && secret.Type != string(models.SecretTypePassword) {
+		return 0, errors.New("management credential is invalid")
+	}
+	return secret.ID, nil
 }
 
 func (h *guardedOperationsHandler) failLaunch(ctx context.Context, operationID int64, next string) {

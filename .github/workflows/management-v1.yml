@@ -116,6 +116,7 @@ jobs:
       - name: Verify management UI
         run: |
           yarn vitest \
+            src/entities/cluster/cluster-info/ui/index.test.tsx \
             src/widgets/cluster-health/ui/index.test.tsx \
             src/widgets/query-performance/ui/index.test.tsx \
             src/pages/operation-log/ui/index.test.tsx \

@@ -413,6 +413,31 @@ paths:
           schema:
             $ref: "#/definitions/Response.Error"
 
+  /clusters/{id}/credential:
+    put:
+      summary: "Attach management credential to cluster"
+      tags:
+        - cluster
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/Request.ClusterCredential"
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: "#/definitions/ClusterInfo"
+        '400':
+          description: Error
+          schema:
+            $ref: "#/definitions/Response.Error"
+
   /clusters/{id}/query-performance:
     get:
       summary: "Get cluster query performance overview"
@@ -1782,6 +1807,15 @@ definitions:
         default: true
         description: "Enable query analytics for new PostgreSQL 14-18 clusters"
 
+  Request.ClusterCredential:
+    type: object
+    required:
+      - secret_id
+    properties:
+      secret_id:
+        type: integer
+        format: int64
+
 
   Response.ClusterDefaultName:
     type: object
@@ -2022,6 +2056,10 @@ definitions:
         description: "Project for cluster"
       connection_info:
         type: object
+      secret_id:
+        type: integer
+        format: int64
+        x-nullable: true
       extra_vars:
         type: string
         description: "Ansible variables"

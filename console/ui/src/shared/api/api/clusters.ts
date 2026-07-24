@@ -37,6 +37,14 @@ const injectedRtkApi = api.injectEndpoints({
       query: (queryArg) => ({ url: `/clusters/${queryArg.id}` }),
       providesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
     }),
+    putClustersByIdCredential: build.mutation<PutClustersByIdCredentialApiResponse, PutClustersByIdCredentialApiArg>({
+      query: (queryArg) => ({
+        url: `/clusters/${queryArg.id}/credential`,
+        method: 'PUT',
+        body: queryArg.requestClusterCredential,
+      }),
+      invalidatesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
+    }),
     getClustersByIdHealth: build.query<GetClustersByIdHealthApiResponse, GetClustersByIdHealthApiArg>({
       query: (queryArg) => ({ url: `/clusters/${queryArg.id}/health` }),
       providesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
@@ -182,6 +190,11 @@ export type GetClustersDefaultNameApiArg = void;
 export type GetClustersByIdApiResponse = /** status 200 OK */ ClusterInfo;
 export type GetClustersByIdApiArg = {
   id: number;
+};
+export type PutClustersByIdCredentialApiResponse = /** status 200 OK */ ClusterInfo;
+export type PutClustersByIdCredentialApiArg = {
+  id: number;
+  requestClusterCredential: RequestClusterCredential;
 };
 export type GetClustersByIdHealthApiResponse = ResponseClusterHealth;
 export type GetClustersByIdHealthApiArg = {
@@ -513,6 +526,7 @@ export type ClusterInfo = {
   /** Project for cluster */
   project_name?: string;
   connection_info?: object;
+  secret_id?: number | null;
 };
 export type PaginationInfoForListRequests = {
   offset?: number | null;
@@ -532,6 +546,9 @@ export type RequestClusterRestart = object;
 export type RequestClusterStop = object;
 export type RequestClusterStart = object;
 export type RequestClusterRemove = object;
+export type RequestClusterCredential = {
+  secret_id: number;
+};
 export const {
   usePostClustersMutation,
   useGetClustersQuery,
@@ -540,6 +557,7 @@ export const {
   useLazyGetClustersDefaultNameQuery,
   useGetClustersByIdQuery,
   useLazyGetClustersByIdQuery,
+  usePutClustersByIdCredentialMutation,
   useGetClustersByIdHealthQuery,
   useLazyGetClustersByIdHealthQuery,
   useGetClustersByIdQueryPerformanceQuery,

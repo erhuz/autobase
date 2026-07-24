@@ -38,6 +38,8 @@ const OverviewCluster: FC = () => {
       </Grid>
       <Grid size={{ xs: 6 }}>
         <ClusterInfo
+          clusterId={Number(clusterId)}
+          secretId={cluster.data?.secret_id}
           postgresVersion={cluster.data?.postgres_version}
           clusterName={cluster.data?.name}
           description={cluster.data?.description}

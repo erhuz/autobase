@@ -19,7 +19,8 @@ const (
 )
 
 func getSecretEnvs(ctx context.Context, log zerolog.Logger, db storage.IStorage, secretID int64, secretKey string) ([]string, ParamLocation, error) {
-	localLog := log.With().Str("cid", ctx.Value(tracer.CtxCidKey{}).(string)).Logger()
+	cid, _ := ctx.Value(tracer.CtxCidKey{}).(string)
+	localLog := log.With().Str("cid", cid).Logger()
 	secretView, err := db.GetSecret(ctx, secretID)
 	if err != nil {
 		return nil, UnknownParamLocation, err

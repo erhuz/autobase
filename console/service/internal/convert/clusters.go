@@ -25,6 +25,7 @@ func ClusterToSwagger(cl *storage.Cluster, servers []storage.Server, environment
 		Description:     cl.Description,
 		PostgresVersion: cl.PostgreVersion,
 		ProjectName:     projectCode,
+		SecretID:        cl.SecretID,
 		Status:          cl.Status,
 	}
 

@@ -211,5 +211,11 @@
   "healthLatestOperation": "Latest completed",
   "healthUnresolvedOperation": "Unresolved failure",
   "yes": "Yes",
-  "no": "No"
+  "no": "No",
+  "managementCredential": "Management credential",
+  "attachCredential": "Attach",
+  "manageCredentials": "Manage credentials",
+  "managementCredentialReady": "Management actions can use the attached credential.",
+  "managementCredentialRequired": "Management actions remain blocked until an SSH key or password is attached.",
+  "managementCredentialAttached": "Management credential attached."
 }

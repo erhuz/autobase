@@ -135,7 +135,7 @@ T23|x|widen `operation_preflights.operation_type` constraint to all supported ty
 T24|x|guard operations-list `finished` to terminal states|V50,I.api.ops
 T25|x|cut image publishing + current pulls to public GHCR|V11,V15,V52,I.image,I.release,I.verify
 T26|x|repair stock `2.9.0` TimescaleDB migration + legacy operation compatibility|V12,V13,V14,V20,V21,V32,V45,V50,V53,I.db,I.release,I.verify
-T27|.|add imported-cluster credential attach + shared management blocker|V3,V4,V9,V18,V22,V32,V44,V54,I.api.credential,I.api.preflight,I.api.run
+T27|x|add imported-cluster credential attach + shared management blocker|V3,V4,V9,V18,V22,V32,V44,V54,I.api.credential,I.api.preflight,I.api.run
 T28|.|cut reproducible `2.9.0-management.1` release manifest + official DB retention|V11,V12,V14,V15,V46,V47,V52,V55,I.image,I.release,I.release.manifest,I.verify
 
 ## §B

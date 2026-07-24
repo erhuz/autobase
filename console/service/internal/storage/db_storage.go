@@ -495,9 +495,10 @@ func (s *dbStorage) UpdateCluster(ctx context.Context, req *UpdateClusterReq) (*
 		`update clusters
 		set connection_info = coalesce($1, connection_info),
 		    cluster_status = coalesce($2, cluster_status),
-		    flags = coalesce($3, flags)
-		where cluster_id = $4 returning *`,
-		req.ConnectionInfo, req.Status, req.Flags, req.ID)
+		    flags = coalesce($3, flags),
+		    secret_id = coalesce($4, secret_id)
+		where cluster_id = $5 returning *`,
+		req.ConnectionInfo, req.Status, req.Flags, req.SecretID, req.ID)
 	if err != nil {
 		return nil, err
 	}

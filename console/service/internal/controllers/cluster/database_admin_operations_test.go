@@ -15,9 +15,11 @@ import (
 
 func databaseAdminFixture() (*guardedOperationStorage, *guardedOperationsHandler) {
 	now := time.Now().UTC()
+	credentialID := int64(7)
 	store := &guardedOperationStorage{
 		cluster: &storage.Cluster{
 			ID: 5, ProjectID: 3, Name: "cluster-1", PostgreVersion: 16,
+			SecretID: &credentialID,
 			Inventory: []byte(`{
 				"all":{"children":{
 					"master":{"hosts":{"postgresql-1":{"hostname":"postgresql-1"}}},

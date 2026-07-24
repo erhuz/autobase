@@ -224,6 +224,7 @@ type UpdateClusterReq struct {
 	ConnectionInfo interface{}
 	Status         *string
 	Flags          *uint32
+	SecretID       *int64
 }
 
 type Operation struct {
