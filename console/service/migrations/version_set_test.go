@@ -13,12 +13,16 @@ type versionSet struct {
 	Schema         int                         `json:"schema"`
 	Name           string                      `json:"name"`
 	SourceBaseline string                      `json:"source_baseline"`
+	ReleaseVersion string                      `json:"release_version"`
+	Platform       string                      `json:"platform"`
 	ImageRegistry  string                      `json:"image_registry"`
 	Components     map[string]versionComponent `json:"components"`
 }
 
 type versionComponent struct {
 	Path          string `json:"path"`
+	Image         string `json:"image"`
+	Digest        string `json:"digest"`
 	VersionSource string `json:"version_source"`
 	MigrationHead int64  `json:"migration_head"`
 }
@@ -35,6 +39,7 @@ func TestManagementVersionSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	if set.Schema != 1 || set.Name != "management-v1" || set.SourceBaseline != "2.9.0" ||
+		set.ReleaseVersion != "2.9.0-management.1" || set.Platform != "linux/amd64" ||
 		set.ImageRegistry != "ghcr.io/erhuz" {
 		t.Fatalf("unexpected version set metadata: %+v", set)
 	}
@@ -45,11 +50,17 @@ func TestManagementVersionSet(t *testing.T) {
 			t.Errorf("%s component missing", name)
 			continue
 		}
-		if component.VersionSource != "release_tag" {
-			t.Errorf("%s version source = %q", name, component.VersionSource)
-		}
 		if info, statErr := os.Stat(filepath.Join(root, component.Path)); statErr != nil || !info.IsDir() {
 			t.Errorf("%s path %q missing", name, component.Path)
+		}
+		if name == "console_db" {
+			if component.VersionSource != "official_2.9.0_digest" || component.Image != "autobase/console_db" ||
+				!strings.HasPrefix(component.Digest, "sha256:") {
+				t.Errorf("console_db version contract = %+v", component)
+			}
+		} else if component.VersionSource != "release_version" ||
+			component.Image != set.ImageRegistry+"/"+map[string]string{"ui": "console_ui", "api": "console_api", "automation": "automation"}[name] {
+			t.Errorf("%s version contract = %+v", name, component)
 		}
 	}
 
@@ -71,6 +82,18 @@ func TestManagementVersionSet(t *testing.T) {
 	if want := set.Components["console_db"].MigrationHead; migrationHead != want {
 		t.Fatalf("migration head = %d, version set = %d", migrationHead, want)
 	}
+
+	serviceVersion, err := os.ReadFile(filepath.Join(root, "console/service/VERSION"))
+	if err != nil || strings.TrimSpace(string(serviceVersion)) != set.ReleaseVersion {
+		t.Fatalf("service version = %q, %v", serviceVersion, err)
+	}
+	var uiPackage struct {
+		Version string `json:"version"`
+	}
+	uiData, err := os.ReadFile(filepath.Join(root, "console/ui/package.json"))
+	if err != nil || json.Unmarshal(uiData, &uiPackage) != nil || uiPackage.Version != set.ReleaseVersion {
+		t.Fatalf("UI version = %q, %v", uiPackage.Version, err)
+	}
 }
 
 func TestImageRegistryContract(t *testing.T) {
@@ -80,16 +103,16 @@ func TestImageRegistryContract(t *testing.T) {
 		required  []string
 		forbidden []string
 	}{
-		{".config/make/docker.mak", []string{"DOCKER_REGISTRY ?= ghcr.io/erhuz", "docker login ghcr.io"}, []string{"Dockerhub"}},
-		{".github/workflows/docker.yml", []string{"packages: write", "DOCKER_REGISTRY_USER: ${{ github.actor }}", "DOCKER_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}"}, []string{"secrets.DOCKER_USERNAME", "secrets.DOCKER_PASSWORD"}},
-		{".github/workflows/release.yml", []string{"packages: write", `IMAGE_TAG_PATTERN="[[:alnum:]_.-]\+"`, "ghcr.io/erhuz/automation:${IMAGE_TAG_PATTERN}", "DOCKER_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}"}, []string{"secrets.DOCKER_USERNAME", "secrets.DOCKER_PASSWORD", `autobase\/console_db:`}},
-		{"console/docker-compose.yml", []string{"ghcr.io/erhuz/console_api:", "ghcr.io/erhuz/console_ui:", "ghcr.io/erhuz/console_db:"}, []string{"autobase/console_api:", "autobase/console_ui:", "autobase/console_db:"}},
-		{"console/docker-compose.caddy.yml", []string{"ghcr.io/erhuz/console_api:", "ghcr.io/erhuz/console_ui:", "ghcr.io/erhuz/console_db:"}, []string{"autobase/console_api:", "autobase/console_ui:", "autobase/console_db:"}},
-		{"console/docker-compose.enterprise.yml", []string{"ghcr.io/erhuz/console_db:"}, []string{"autobase/console_db:"}},
-		{"console/docker-compose.enterprise.ssl.yml", []string{"ghcr.io/erhuz/console_db:"}, []string{"autobase/console_db:"}},
-		{"console/README.md", []string{"ghcr.io/erhuz/automation:latest", "ghcr.io/erhuz/console:latest"}, []string{"autobase/automation:", "autobase/console:"}},
-		{"console/service/README.md", []string{"ghcr.io/erhuz/automation:"}, []string{"autobase/automation:"}},
-		{"console/service/internal/configuration/config.go", []string{"ghcr.io/erhuz/automation:"}, []string{"autobase/automation:"}},
+		{".config/make/docker.mak", []string{"DOCKER_REGISTRY ?= ghcr.io/erhuz", "DOCKER_PLATFORMS ?= linux/amd64", "docker-push-management", "docker login ghcr.io"}, []string{"Dockerhub"}},
+		{".github/workflows/docker.yml", []string{"packages: write", "make docker-push-management", "DOCKER_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}"}, []string{"make docker-push\n", "secrets.DOCKER_PASSWORD"}},
+		{".github/workflows/release.yml", []string{"2.9.0-management.*", "git diff --exit-code", "make docker-push-management", "release-manifest.json", "docker logout ghcr.io", "gh release create"}, []string{"sed -i", "git commit", "git push", "ansible-galaxy collection publish", "docker-push-console-db"}},
+		{"console/docker-compose.yml", []string{"ghcr.io/erhuz/console_api:2.9.0-management.1", "ghcr.io/erhuz/console_ui:2.9.0-management.1", "autobase/console_db:2.9.0"}, []string{"ghcr.io/erhuz/console_db:"}},
+		{"console/docker-compose.caddy.yml", []string{"ghcr.io/erhuz/console_api:2.9.0-management.1", "ghcr.io/erhuz/console_ui:2.9.0-management.1", "autobase/console_db:2.9.0"}, []string{"ghcr.io/erhuz/console_db:"}},
+		{"console/docker-compose.enterprise.yml", []string{"autobase/console_db:2.9.0"}, []string{"ghcr.io/erhuz/console_db:"}},
+		{"console/docker-compose.enterprise.ssl.yml", []string{"autobase/console_db:2.9.0"}, []string{"ghcr.io/erhuz/console_db:"}},
+		{"console/README.md", []string{"### Docker Compose"}, []string{"ghcr.io/erhuz/console:"}},
+		{"console/service/README.md", []string{"ghcr.io/erhuz/automation:2.9.0-management.1"}, []string{"ghcr.io/erhuz/automation:latest"}},
+		{"console/service/internal/configuration/config.go", []string{"ghcr.io/erhuz/automation:2.9.0-management.1"}, []string{"ghcr.io/erhuz/automation:latest"}},
 	}
 
 	for _, contract := range contracts {

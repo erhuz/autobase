@@ -48,7 +48,7 @@ services:
       - autobase
 
   autobase-console-db:
-    image: ghcr.io/erhuz/console_db:latest
+    image: autobase/console_db:2.9.0
     container_name: autobase-console-db
     healthcheck:
       test: pg_isready -U postgres -h 127.0.0.1

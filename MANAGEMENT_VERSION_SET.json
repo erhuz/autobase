@@ -2,24 +2,31 @@
   "schema": 1,
   "name": "management-v1",
   "source_baseline": "2.9.0",
+  "release_version": "2.9.0-management.1",
+  "platform": "linux/amd64",
   "image_registry": "ghcr.io/erhuz",
   "components": {
     "ui": {
       "path": "console/ui",
-      "version_source": "release_tag"
+      "image": "ghcr.io/erhuz/console_ui",
+      "version_source": "release_version"
     },
     "api": {
       "path": "console/service",
-      "version_source": "release_tag"
+      "image": "ghcr.io/erhuz/console_api",
+      "version_source": "release_version"
     },
     "console_db": {
       "path": "console/db",
-      "version_source": "release_tag",
+      "image": "autobase/console_db",
+      "digest": "sha256:03b479cb77d6254d4c4e942df899b516e269dcd708db4056361b5efb2e715895",
+      "version_source": "official_2.9.0_digest",
       "migration_head": 20260724130000
     },
     "automation": {
       "path": "automation",
-      "version_source": "release_tag"
+      "image": "ghcr.io/erhuz/automation",
+      "version_source": "release_version"
     }
   }
 }

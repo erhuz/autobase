@@ -41,24 +41,6 @@ The Console stack consists of the following core components:
 > [!NOTE]
 > It is recommended to run the console in the same network as your database servers to enable monitoring of the cluster status.
 
-### Single Container
-
-To run the Autobase Console, execute the following command:
-
-```
-docker run -d --name autobase-console \
-  --publish 80:80 \
-  --env PG_CONSOLE_AUTHORIZATION_TOKEN=secret_token \
-  --env PG_CONSOLE_DOCKER_IMAGE=ghcr.io/erhuz/automation:latest \
-  --volume console_postgres:/var/lib/postgresql \
-  --volume /var/run/docker.sock:/var/run/docker.sock \
-  --volume /tmp/ansible:/tmp/ansible \
-  --restart=unless-stopped \
-  ghcr.io/erhuz/console:latest
-```
-
-Refer to the [Deployment](https://autobase.tech/docs/category/deployment) section to learn more about the different deployment methods.
-
 ### Docker Compose
 
 1. Clone the repository:

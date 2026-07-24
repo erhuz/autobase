@@ -2,7 +2,7 @@
 TAG ?= local
 DOCKER_REGISTRY ?= ghcr.io/erhuz
 DOCKER_BUILD_PLATFORM ?= linux/amd64
-DOCKER_PLATFORMS ?= linux/amd64,linux/arm64
+DOCKER_PLATFORMS ?= linux/amd64
 DOCKER_BUILDX_BUILDER ?= autobase-builder
 
 # Sanitize the tag by replacing slashes with hyphens for Docker compatibility
@@ -42,7 +42,7 @@ docker-buildx-setup: ## Set up Docker Buildx builder
 	docker buildx use $(DOCKER_BUILDX_BUILDER)
 	docker buildx inspect --bootstrap > /dev/null
 
-.PHONY: docker-build docker-build-automation docker-build-console-ui docker-build-console-api docker-build-console-db docker-build-console
+.PHONY: docker-build docker-build-management docker-build-automation docker-build-console-ui docker-build-console-api docker-build-console-db docker-build-console
 docker-build: ## Build for all Docker images
 	$(MAKE) docker-buildx-setup
 	$(MAKE) docker-build-automation
@@ -50,6 +50,12 @@ docker-build: ## Build for all Docker images
 	$(MAKE) docker-build-console-api
 	$(MAKE) docker-build-console-db
 	$(MAKE) docker-build-console
+
+docker-build-management: ## Build production management images
+	$(MAKE) docker-buildx-setup
+	$(MAKE) docker-build-automation
+	$(MAKE) docker-build-console-ui
+	$(MAKE) docker-build-console-api
 
 docker-build-automation: ## Build automation image
 	@echo "Build automation docker image with tag $(TAG) (sanitized as $(SANITIZED_TAG))";
@@ -71,7 +77,7 @@ docker-build-console: ## Build console image (all services)
 	@echo "Build console docker image with tag $(TAG) (sanitized as $(SANITIZED_TAG))"
 	docker buildx build --no-cache --platform $(DOCKER_BUILD_PLATFORM) --tag console:$(SANITIZED_TAG) --file console/Dockerfile --load .
 
-.PHONY: docker-login docker-push docker-push-console-ui docker-push-console-api docker-push-console-db docker-push-console
+.PHONY: docker-login docker-push docker-push-management docker-push-console-ui docker-push-console-api docker-push-console-db docker-push-console
 docker-login: ## Login to GHCR
 	echo "$(DOCKER_REGISTRY_PASSWORD)" | docker login ghcr.io --username "$(DOCKER_REGISTRY_USER)" --password-stdin
 
@@ -83,6 +89,13 @@ docker-push: ## Build and Push all images to GHCR
 	$(MAKE) docker-push-console-api
 	$(MAKE) docker-push-console-db
 	$(MAKE) docker-push-console
+
+docker-push-management: ## Build and push production management images to GHCR
+	$(MAKE) docker-buildx-setup
+	$(MAKE) docker-login
+	$(MAKE) docker-push-automation
+	$(MAKE) docker-push-console-ui
+	$(MAKE) docker-push-console-api
 
 docker-push-automation: ## Build and Push automation to GHCR
 	@echo "Build and Push automation docker image with tag $(TAG) (sanitized as $(SANITIZED_TAG))";

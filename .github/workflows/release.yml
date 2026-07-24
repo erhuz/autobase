@@ -4,7 +4,7 @@ name: "Release and Publish"
 on:
   push:
     tags:
-      - "*"
+      - "2.9.0-management.*"
 
 permissions:
   contents: write
@@ -19,135 +19,96 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Set TERM environment variable
-        run: echo "TERM=xterm" >> $GITHUB_ENV
-
-      - name: Checkout
+      - name: Checkout tagged source
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-
-      - name: Install dependencies
-        run: make bootstrap-dev
-
-      - name: Get tag name
-        id: tag
-        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Update all version references
-        run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          VERSION_PATTERN="[0-9]\+\.[0-9]\+\.[0-9]\+"
-          IMAGE_TAG_PATTERN="[[:alnum:]_.-]\+"
-
-          # Update galaxy.yml version
-          sed -i "s/^version:.*/version: ${TAG}/" \
-            automation/galaxy.yml
-
-          # Update automation README version
-          sed -i "s/version: ${VERSION_PATTERN}/version: ${TAG}/" \
-            automation/README.md
-
-          # Update console docker-compose image tags
-          sed -i "s#ghcr.io/erhuz/console_api:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_api:${TAG}#g" \
-            console/docker-compose.yml
-          sed -i "s#ghcr.io/erhuz/console_ui:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_ui:${TAG}#g" \
-            console/docker-compose.yml
-          sed -i "s#ghcr.io/erhuz/console_db:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_db:${TAG}#g" \
-            console/docker-compose.yml
-
-          sed -i "s#ghcr.io/erhuz/console_api:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_api:${TAG}#g" \
-            console/docker-compose.caddy.yml
-          sed -i "s#ghcr.io/erhuz/console_ui:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_ui:${TAG}#g" \
-            console/docker-compose.caddy.yml
-          sed -i "s#ghcr.io/erhuz/console_db:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_db:${TAG}#g" \
-            console/docker-compose.caddy.yml
-
-          sed -i "s/autobase\/console_api_ee:${VERSION_PATTERN}/autobase\/console_api_ee:${TAG}/g" \
-            console/docker-compose.enterprise.yml
-          sed -i "s/autobase\/console_ui_ee:${VERSION_PATTERN}/autobase\/console_ui_ee:${TAG}/g" \
-            console/docker-compose.enterprise.yml
-          sed -i "s#ghcr.io/erhuz/console_db:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_db:${TAG}#g" \
-            console/docker-compose.enterprise.yml
-
-          sed -i "s/autobase\/console_api_ee:${VERSION_PATTERN}/autobase\/console_api_ee:${TAG}/g" \
-            console/docker-compose.enterprise.ssl.yml
-          sed -i "s/autobase\/console_ui_ee:${VERSION_PATTERN}/autobase\/console_ui_ee:${TAG}/g" \
-            console/docker-compose.enterprise.ssl.yml
-          sed -i "s#ghcr.io/erhuz/console_db:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/console_db:${TAG}#g" \
-            console/docker-compose.enterprise.ssl.yml
-
-          # Update console service VERSION file
-          echo "${TAG}" > console/service/VERSION
-
-          # Update console service README version
-          sed -i "s#ghcr.io/erhuz/automation:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/automation:${TAG}#g" \
-            console/service/README.md
-
-          # Update swagger.yaml version
-          sed -i "s/^  version: ${VERSION_PATTERN}/  version: ${TAG}/" \
-            console/service/api/swagger.yaml
-
-          # Update config.go version
-          sed -i "s#ghcr.io/erhuz/automation:${IMAGE_TAG_PATTERN}#ghcr.io/erhuz/automation:${TAG}#g" \
-            console/service/internal/configuration/config.go
-
-          # Update package.json version
-          sed -i "s/\"version\": \"${VERSION_PATTERN}\"/\"version\": \"${TAG}\"/" \
-            console/ui/package.json
-
-      - name: Commit version changes to main branch
-        run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          # Add all changed files
-          git add \
-            automation/galaxy.yml \
-            automation/README.md \
-            console/docker-compose.yml \
-            console/docker-compose.caddy.yml \
-            console/docker-compose.enterprise.yml \
-            console/docker-compose.enterprise.ssl.yml \
-            console/service/VERSION \
-            console/service/README.md \
-            console/service/api/swagger.yaml \
-            console/service/internal/configuration/config.go \
-            console/ui/package.json
-
-          # Check if there are changes to commit
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: release ${TAG}"
-            git push origin HEAD:${{ github.event.repository.default_branch }}
-          fi
-
-      - name: Build Ansible collection
-        run: |
-          cd automation
-          ansible-galaxy collection build
-
-      - name: Publish to Ansible Galaxy
-        run: |
-          cd automation
-          ansible-galaxy collection publish \
-            vitabaks-autobase-${{ steps.tag.outputs.tag }}.tar.gz \
-            --token $ANSIBLE_GALAXY_TOKEN
+      - name: Verify immutable version set
         env:
-          ANSIBLE_GALAXY_TOKEN: ${{ secrets.ANSIBLE_GALAXY_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          test "$(jq -r .release_version MANAGEMENT_VERSION_SET.json)" = "$TAG"
+          test "$(jq -r .source_baseline MANAGEMENT_VERSION_SET.json)" = "2.9.0"
+          test "$(jq -r .platform MANAGEMENT_VERSION_SET.json)" = "linux/amd64"
+          test "$(cat console/service/VERSION)" = "$TAG"
+          test "$(jq -r .version console/ui/package.json)" = "$TAG"
+          grep -qx "  version: $TAG" console/service/api/swagger.yaml
+          git diff --exit-code
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
-      - name: Build and Push release image
-        run: make docker-push
+      - name: Publish management images
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ github.ref_name }}
+          DOCKER_PLATFORMS: linux/amd64
           DOCKER_REGISTRY_USER: ${{ github.actor }}
           DOCKER_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: make docker-push-management
+
+      - name: Generate release manifest
+        env:
+          TAG: ${{ github.ref_name }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          image_digest() {
+            docker buildx imagetools inspect "$1" | awk '/^Digest:/ {print $2; exit}'
+          }
+          UI_DIGEST="$(image_digest "ghcr.io/erhuz/console_ui:$TAG")"
+          API_DIGEST="$(image_digest "ghcr.io/erhuz/console_api:$TAG")"
+          AUTOMATION_DIGEST="$(image_digest "ghcr.io/erhuz/automation:$TAG")"
+          DB_DIGEST="$(jq -r .components.console_db.digest MANAGEMENT_VERSION_SET.json)"
+          MIGRATION_HEAD="$(jq -r .components.console_db.migration_head MANAGEMENT_VERSION_SET.json)"
+          jq -n \
+            --arg release "$TAG" \
+            --arg base "2.9.0" \
+            --arg source_commit "$SOURCE_COMMIT" \
+            --arg platform "linux/amd64" \
+            --arg ui_digest "$UI_DIGEST" \
+            --arg api_digest "$API_DIGEST" \
+            --arg db_digest "$DB_DIGEST" \
+            --arg automation_digest "$AUTOMATION_DIGEST" \
+            --argjson migration_head "$MIGRATION_HEAD" \
+            '{
+              schema: 1,
+              release: $release,
+              base: $base,
+              source_commit: $source_commit,
+              migration_head: $migration_head,
+              platform: $platform,
+              components: {
+                ui: {image: "ghcr.io/erhuz/console_ui", digest: $ui_digest},
+                api: {image: "ghcr.io/erhuz/console_api", digest: $api_digest},
+                console_db: {image: "autobase/console_db", digest: $db_digest},
+                automation: {image: "ghcr.io/erhuz/automation", digest: $automation_digest}
+              }
+            }' > release-manifest.json
+          jq -e --arg release "$TAG" '
+            .release == $release
+            and .base == "2.9.0"
+            and .platform == "linux/amd64"
+            and ([.components[].digest | startswith("sha256:")] | all)
+          ' release-manifest.json
+
+      - name: Verify anonymous pulls
+        run: |
+          docker logout ghcr.io || true
+          jq -r '
+            .components[]
+            | select(.image | startswith("ghcr.io/"))
+            | "\(.image)@\(.digest)"
+          ' release-manifest.json |
+            while read -r image; do
+              docker buildx imagetools inspect "$image"
+            done
+
+      - name: Upload release manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: management-version-set
+          path: release-manifest.json
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" release-manifest.json --verify-tag --title "$TAG" --notes "Direct upgrade from Autobase Community 2.9.0."
