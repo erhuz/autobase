@@ -1,13 +1,9 @@
 -- +goose Up
 
 alter table public.operations drop constraint operations_operation_status_check;
-alter table public.operations disable trigger handle_updated_at;
-update public.operations set operation_status = 'running' where operation_status = 'in_progress';
-update public.operations set operation_status = 'succeeded' where operation_status = 'success';
-alter table public.operations enable trigger handle_updated_at;
 alter table public.operations
   add constraint operations_operation_status_check
-  check (operation_status in ('queued', 'running', 'succeeded', 'failed', 'cancelled'));
+  check (operation_status in ('in_progress', 'success', 'queued', 'running', 'succeeded', 'failed', 'cancelled'));
 
 alter table public.operations
   add column actor text not null default 'api-token',
@@ -48,7 +44,7 @@ create table public.cluster_operation_locks (
 -- +goose StatementBegin
 create function public.release_cluster_operation_lock() returns trigger as $$
 begin
-  if new.operation_status in ('succeeded', 'failed', 'cancelled') then
+  if new.operation_status in ('success', 'succeeded', 'failed', 'cancelled') then
     delete from public.cluster_operation_locks
     where cluster_id = new.cluster_id and operation_id = new.id;
   end if;
@@ -64,7 +60,7 @@ create trigger release_cluster_operation_lock
 -- +goose StatementBegin
 create function public.keep_terminal_operation_immutable() returns trigger as $$
 begin
-  if old.operation_status in ('succeeded', 'failed', 'cancelled') then
+  if old.operation_status in ('success', 'succeeded', 'failed', 'cancelled') then
     if new.operation_status is distinct from old.operation_status
       or (to_jsonb(new) - 'operation_log' - 'updated_at') is distinct from
          (to_jsonb(old) - 'operation_log' - 'updated_at')
@@ -100,11 +96,6 @@ alter table public.operations
   drop column if exists actor;
 
 alter table public.operations drop constraint operations_operation_status_check;
-alter table public.operations disable trigger handle_updated_at;
-update public.operations set operation_status = 'in_progress' where operation_status in ('queued', 'running');
-update public.operations set operation_status = 'success' where operation_status = 'succeeded';
-update public.operations set operation_status = 'failed' where operation_status = 'cancelled';
-alter table public.operations enable trigger handle_updated_at;
 alter table public.operations
   add constraint operations_operation_status_check
-  check (operation_status in ('in_progress', 'success', 'failed'));
+  check (operation_status in ('in_progress', 'success', 'queued', 'running', 'succeeded', 'failed', 'cancelled'));

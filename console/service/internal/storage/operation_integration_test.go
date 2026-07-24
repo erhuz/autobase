@@ -225,4 +225,48 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 	if !secondFound {
 		t.Fatal("cancelled operation has no finished timestamp")
 	}
+
+	var legacyRunningID, legacySuccessID int64
+	if err = pool.QueryRow(ctx, `insert into operations(
+		project_id, cluster_id, docker_code, operation_type, operation_status, cid, operation_log, created_at, updated_at)
+		values($1,$2,'legacy-container','reload','in_progress',$3,'legacy running',now() - interval '2 minutes',now() - interval '1 minute')
+		returning id`, projectID, cluster.ID, uuid.NewString()).Scan(&legacyRunningID); err != nil {
+		t.Fatal(err)
+	}
+	if err = pool.QueryRow(ctx, `insert into operations(
+		project_id, cluster_id, docker_code, operation_type, operation_status, cid, operation_log, created_at, updated_at)
+		values($1,$2,'legacy-container','deploy','success',$3,'legacy success',now() - interval '4 minutes',now() - interval '3 minutes')
+		returning id`, projectID, cluster.ID, uuid.NewString()).Scan(&legacySuccessID); err != nil {
+		t.Fatal(err)
+	}
+	if active, err := store.HasActiveOperation(ctx, cluster.ID); err != nil || !active {
+		t.Fatalf("legacy in_progress active = %v, %v", active, err)
+	}
+	blocked := req
+	blocked.Cid = uuid.NewString()
+	if _, err = store.ReserveOperation(ctx, &blocked); err == nil {
+		t.Fatal("legacy in_progress operation did not block reservation")
+	}
+	legacyRunning, err := store.GetOperation(ctx, legacyRunningID)
+	if err != nil || legacyRunning.Status != OperationStatusRunning {
+		t.Fatalf("legacy running operation = %+v, %v", legacyRunning, err)
+	}
+	legacySuccess, err := store.GetOperation(ctx, legacySuccessID)
+	if err != nil || legacySuccess.Status != OperationStatusSucceeded || !IsTerminalOperationStatus(legacySuccess.Status) {
+		t.Fatalf("legacy success operation = %+v, %v", legacySuccess, err)
+	}
+	if _, err = store.UpdateOperation(ctx, &UpdateOperationReq{ID: legacySuccessID, Status: &failed}); err == nil {
+		t.Fatal("legacy terminal operation was mutable")
+	}
+	inProgress, err := store.GetInProgressOperations(ctx, time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyRunningFound := false
+	for _, operation := range inProgress {
+		legacyRunningFound = legacyRunningFound || operation.ID == legacyRunningID && operation.Status == OperationStatusRunning
+	}
+	if !legacyRunningFound {
+		t.Fatalf("legacy running operation missing from watcher query: %+v", inProgress)
+	}
 }

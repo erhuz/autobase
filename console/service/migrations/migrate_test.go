@@ -64,6 +64,28 @@ func TestStock290Upgrade(t *testing.T) {
 	if _, err = pool.Exec(ctx, string(fixtureSQL)); err != nil {
 		t.Fatal(err)
 	}
+	var serverVersion, compressedChunks int
+	var timescaleVersion string
+	var operationsHypertable bool
+	if err = pool.QueryRow(ctx, "select current_setting('server_version_num')::int").Scan(&serverVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err = pool.QueryRow(ctx, "select extversion from pg_extension where extname = 'timescaledb'").Scan(&timescaleVersion); err != nil {
+		t.Fatal("stock upgrade test requires the production TimescaleDB image:", err)
+	}
+	if err = pool.QueryRow(ctx, `select exists(
+		select 1 from timescaledb_information.hypertables
+		where hypertable_schema = 'public' and hypertable_name = 'operations')`).Scan(&operationsHypertable); err != nil {
+		t.Fatal(err)
+	}
+	if err = pool.QueryRow(ctx, `select count(*) from timescaledb_information.chunks
+		where hypertable_schema = 'public' and hypertable_name = 'operations' and is_compressed`).Scan(&compressedChunks); err != nil {
+		t.Fatal(err)
+	}
+	if serverVersion/10000 != 16 || timescaleVersion == "" || !operationsHypertable || compressedChunks == 0 {
+		t.Fatalf("production DB shape missing: pg=%d timescale=%q hypertable=%t compressed_chunks=%d",
+			serverVersion, timescaleVersion, operationsHypertable, compressedChunks)
+	}
 
 	configData, err := os.ReadFile("testdata/2.9.0/config.json")
 	if err != nil {
@@ -127,17 +149,36 @@ func TestStock290Upgrade(t *testing.T) {
 	})
 
 	t.Run("migrates operation history without launching work", func(t *testing.T) {
-		var count int
-		var status, operationLog, actor string
+		var preserved, canonical bool
 		if err := pool.QueryRow(ctx, `
-			select count(*), min(operation_status), min(operation_log), min(actor)
+			select count(*) = 2
+				and count(*) filter (where operation_status = 'success'
+					and operation_log = 'fixture operation completed'
+					and created_at = '2026-05-01 12:00:00+00'
+					and updated_at = '2026-05-01 12:01:00+00') = 1
+				and count(*) filter (where operation_status = 'in_progress'
+					and operation_log = 'fixture operation running'
+					and created_at = '2026-06-01 12:00:00+00'
+					and updated_at = '2026-06-01 12:01:00+00') = 1
+				and bool_and(actor = 'api-token')
 			from public.operations
 			where cluster_id = (select cluster_id from public.clusters where cluster_name = 'migration-fixture')`).
-			Scan(&count, &status, &operationLog, &actor); err != nil {
+			Scan(&preserved); err != nil {
 			t.Fatal(err)
 		}
-		if count != 1 || status != "succeeded" || operationLog != "fixture operation completed" || actor != "api-token" {
-			t.Fatalf("operation count=%d status=%q log=%q actor=%q", count, status, operationLog, actor)
+		if !preserved {
+			t.Fatal("compressed legacy operation history changed")
+		}
+		if err := pool.QueryRow(ctx, `
+			select count(*) = 2
+				and count(*) filter (where status = 'succeeded' and finished = '2026-05-01 12:01:00+00') = 1
+				and count(*) filter (where status = 'running' and finished is null) = 1
+			from public.v_operations
+			where cluster = 'migration-fixture'`).Scan(&canonical); err != nil {
+			t.Fatal(err)
+		}
+		if !canonical {
+			t.Fatal("legacy operation status was not canonicalized at the read boundary")
 		}
 	})
 

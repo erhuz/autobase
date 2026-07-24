@@ -6,9 +6,13 @@ select
   op.cluster_id,
   op.id,
   op.created_at as "started",
-  case when op.operation_status in ('succeeded', 'failed', 'cancelled') then op.updated_at end as "finished",
+  case when op.operation_status in ('success', 'succeeded', 'failed', 'cancelled') then op.updated_at end as "finished",
   op.operation_type as "type",
-  op.operation_status as "status",
+  case op.operation_status
+    when 'in_progress' then 'running'
+    when 'success' then 'succeeded'
+    else op.operation_status
+  end as "status",
   cl.cluster_name as "cluster",
   env.environment_name as "environment"
 from

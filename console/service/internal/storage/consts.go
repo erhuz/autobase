@@ -14,6 +14,8 @@ const (
 
 	OperationStatusInProgress = OperationStatusRunning
 	OperationStatusSuccess    = OperationStatusSucceeded
+	legacyOperationInProgress = "in_progress"
+	legacyOperationSuccess    = "success"
 
 	OperationTypeDeploy                = "deploy"
 	OperationTypeSwitchover            = "switchover"
@@ -45,7 +47,19 @@ const (
 )
 
 func IsTerminalOperationStatus(status string) bool {
+	status = canonicalOperationStatus(status)
 	return status == OperationStatusSucceeded || status == OperationStatusFailed || status == OperationStatusCancelled
+}
+
+func canonicalOperationStatus(status string) string {
+	switch status {
+	case legacyOperationInProgress:
+		return OperationStatusRunning
+	case legacyOperationSuccess:
+		return OperationStatusSucceeded
+	default:
+		return status
+	}
 }
 
 var (

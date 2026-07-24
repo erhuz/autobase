@@ -92,7 +92,45 @@ select
   'deploy',
   'success',
   'fixture operation completed',
-  '2026-07-01 12:00:00+00',
-  '2026-07-01 12:01:00+00'
+  '2026-05-01 12:00:00+00',
+  '2026-05-01 12:01:00+00'
 from public.clusters
 where cluster_name = 'migration-fixture';
+
+insert into public.operations (
+  project_id,
+  cluster_id,
+  docker_code,
+  cid,
+  operation_type,
+  operation_status,
+  operation_log,
+  created_at,
+  updated_at
+)
+select
+  project_id,
+  cluster_id,
+  'migration-fixture-active',
+  '00000000-0000-0000-0000-000000000002',
+  'reload',
+  'in_progress',
+  'fixture operation running',
+  '2026-06-01 12:00:00+00',
+  '2026-06-01 12:01:00+00'
+from public.clusters
+where cluster_name = 'migration-fixture';
+
+-- +goose StatementBegin
+do $$
+declare
+  chunk regclass;
+begin
+  if exists (select 1 from pg_extension where extname = 'timescaledb') then
+    for chunk in select show_chunks('public.operations') loop
+      perform compress_chunk(chunk, if_not_compressed => true);
+    end loop;
+  end if;
+end
+$$;
+-- +goose StatementEnd

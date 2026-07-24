@@ -34,6 +34,7 @@ api.health: `GET /clusters/{id}/health` → `{observed_at,topology,dcs,routing,b
 api.query: `GET /clusters/{id}/query-performance` + `GET /clusters/{id}/query-performance/{fingerprintId}` → `{status,coverage,summary,series,queries|fingerprint,filters?,histogram?}`.
 api.preflight: `POST /clusters/{id}/preflights` `{type,target?,params?}` → `{id,observed,desired,checks,blockers,plan,affected_nodes,confirmation}`.
 api.run: `POST /clusters/{id}/operations` `{preflight_id,confirmation}` → `{operation_id,status}`.
+api.credential: `PUT /clusters/{id}/credential` `{secret_id}` → `ClusterInfo`; secret value ⊥ response.
 api.ops: `GET /operations` + `GET /operations/{id}` + `GET /operations/{id}/log` → durable operation/audit state.
 op.v1: `type ∈ {switchover,reload,rolling_restart,replica_reinit,backup_full,backup_diff,query_analytics_enable,query_analytics_disable}`.
 op.state: `queued → running → succeeded|failed|cancelled`.
@@ -43,7 +44,8 @@ automation: API runner → existing inventory + supported Autobase playbooks/rol
 automation.query: signed package + secure PGSM config + scoped read-only role + serial HA rollout.
 authority: Patroni/DCS → live topology; routing target checks → traffic state; pgBackRest → backup/WAL/lock state.
 release: stock `2.9.0` DB/config fixture → migrate → verify data + secrets metadata + zero managed-cluster mutation.
-image: main → public `ghcr.io/erhuz/{automation,console_ui,console_api,console_db,console}:latest`; tag `<tag>` → same:`<tag>`.
+image: main/tag → public `ghcr.io/erhuz/{automation,console_ui,console_api}`; Console DB = official Autobase `2.9.0` digest.
+release.manifest: tag artifact → `{release,base,source_commit,migration_head,platform,ui,api,console_db,automation}` refs + digests.
 verify: Go unit/integration + UI unit/e2e + migration fixture + operation safety contract + `git diff --check`.
 
 ## §V
@@ -100,6 +102,9 @@ V49: query-performance refresh/filter change advances window end; stale window r
 V50: operation `finished` timestamp ∃ iff status ∈ `succeeded,failed,cancelled`.
 V51: ∀ supported operation type → preflight persistence + schema constraints accept it; integration test exercises ≥1 non-analytics type against real schema.
 V52: I.image publish auth = GitHub Actions `GITHUB_TOKEN` + `packages:write`; anonymous pull succeeds; Docker Hub publish ⊥; current refs use I.image; stock `2.9.0` fixture unchanged.
+V53: stock `2.9.0` upgrade gate = production Console DB PostgreSQL 16 + TimescaleDB columnstore hypertable + compressed legacy operations; raw history/timestamps preserved; external status canonical; migration succeeds.
+V54: ∀ Automation-backed mutation → attached same-project `ssh_key|password` secret !; absent/invalid credential blocks preflight + execution.
+V55: release built from tagged source commit; workflow source edits/commits ⊥; §I.release.manifest pins base, head, platform, official DB + published UI/API/Automation digests.
 
 ## §T
 
@@ -129,6 +134,9 @@ T22|x|add guarded PGSM enable/disable preflight + serial HA operation|V4,V5,V19,
 T23|x|widen `operation_preflights.operation_type` constraint to all supported types + non-analytics preflight integration test|V4,V32,V51,I.db,I.api.preflight
 T24|x|guard operations-list `finished` to terminal states|V50,I.api.ops
 T25|x|cut image publishing + current pulls to public GHCR|V11,V15,V52,I.image,I.release,I.verify
+T26|x|repair stock `2.9.0` TimescaleDB migration + legacy operation compatibility|V12,V13,V14,V20,V21,V32,V45,V50,V53,I.db,I.release,I.verify
+T27|.|add imported-cluster credential attach + shared management blocker|V3,V4,V9,V18,V22,V32,V44,V54,I.api.credential,I.api.preflight,I.api.run
+T28|.|cut reproducible `2.9.0-management.1` release manifest + official DB retention|V11,V12,V14,V15,V46,V47,V52,V55,I.image,I.release,I.release.manifest,I.verify
 
 ## §B
 
@@ -194,3 +202,4 @@ B58|2026-07-24|restore syntax gate ran before declared Automation collections in
 B59|2026-07-24|new lifecycle Go source missed canonical formatting; service gate stopped before tests|V47
 B60|2026-07-24|`operation_preflights.operation_type` check constraint fixed at query-analytics types; ∀ other guarded preflight insert fails|V4,V51
 B61|2026-07-24|`v_operations` mapped `updated_at` to `finished` unguarded; running rows reported terminal timestamp in list API|V50
+B62|2026-07-24|plain PostgreSQL 17 migration gate missed TimescaleDB columnstore; guarded migration disabled hypertable trigger + rewrote compressed history|V53

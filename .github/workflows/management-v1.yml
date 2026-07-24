@@ -18,14 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: autobase/console_db@sha256:03b479cb77d6254d4c4e942df899b516e269dcd708db4056361b5efb2e715895
         env:
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: pg_console
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d pg_console"
+          --health-cmd "PGPASSWORD=test psql -h 127.0.0.1 -U postgres -d postgres -Atc 'select extversion from pg_extension where extname = ''timescaledb''' | grep -q ."
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -62,9 +61,9 @@ jobs:
             internal/controllers/cluster/database_admin_operations_test.go \
             internal/controllers/cluster/phase3_services_operations.go \
             internal/controllers/cluster/phase3_services_operations_test.go)"
-          PG_CONSOLE_TEST_DSN="postgres://postgres:test@127.0.0.1:5432/pg_console?sslmode=disable" \
+          PG_CONSOLE_TEST_DSN="postgres://postgres:test@127.0.0.1:5432/postgres?sslmode=disable" \
             go test -mod=readonly ./migrations
-          PG_CONSOLE_TEST_DSN="postgres://postgres:test@127.0.0.1:5432/pg_console?sslmode=disable" \
+          PG_CONSOLE_TEST_DSN="postgres://postgres:test@127.0.0.1:5432/postgres?sslmode=disable" \
             go test -mod=readonly ./internal/storage
           go test -mod=readonly ./...
           go vet -mod=readonly ./...

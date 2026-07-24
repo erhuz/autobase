@@ -530,8 +530,8 @@ func (s *dbStorage) ReserveOperation(ctx context.Context, req *CreateOperationRe
 	defer tx.Rollback(ctx) //nolint:errcheck
 	var active int
 	err = tx.QueryRow(ctx, `select 1 from operations
-		where cluster_id = $1 and operation_status in ($2,$3) limit 1 for update`,
-		req.ClusterID, OperationStatusQueued, OperationStatusRunning).Scan(&active)
+		where cluster_id = $1 and operation_status in ($2,$3,$4) limit 1 for update`,
+		req.ClusterID, OperationStatusQueued, OperationStatusRunning, legacyOperationInProgress).Scan(&active)
 	if err == nil {
 		return nil, errors.New("another cluster mutation is active")
 	}
@@ -710,10 +710,13 @@ func (s *dbStorage) DeleteServer(ctx context.Context, id int64) error {
 }
 
 func (s *dbStorage) GetInProgressOperations(ctx context.Context, from time.Time) ([]Operation, error) {
-	operations, err := QueryRowsToStruct[Operation](ctx, s.db, "select * from operations where operation_status = $1 and created_at > $2 and docker_code <> ''",
-		OperationStatusRunning, from)
+	operations, err := QueryRowsToStruct[Operation](ctx, s.db, "select * from operations where operation_status in ($1,$2) and created_at > $3 and docker_code <> ''",
+		OperationStatusRunning, legacyOperationInProgress, from)
 	if err != nil {
 		return nil, err
+	}
+	for i := range operations {
+		operations[i].Status = canonicalOperationStatus(operations[i].Status)
 	}
 
 	return operations, nil
@@ -741,6 +744,7 @@ func (s *dbStorage) UpdateOperation(ctx context.Context, req *UpdateOperationReq
 	if err != nil {
 		return nil, err
 	}
+	operation.Status = canonicalOperationStatus(operation.Status)
 
 	return operation, nil
 }
@@ -748,8 +752,8 @@ func (s *dbStorage) UpdateOperation(ctx context.Context, req *UpdateOperationReq
 func (s *dbStorage) HasActiveOperation(ctx context.Context, clusterID int64) (bool, error) {
 	return QueryRowToScalar[bool](ctx, s.db, `select
 		exists(select 1 from cluster_operation_locks where cluster_id = $1)
-		or exists(select 1 from operations where cluster_id = $1 and operation_status in ($2,$3))`,
-		clusterID, OperationStatusQueued, OperationStatusRunning)
+		or exists(select 1 from operations where cluster_id = $1 and operation_status in ($2,$3,$4))`,
+		clusterID, OperationStatusQueued, OperationStatusRunning, legacyOperationInProgress)
 }
 
 func (s *dbStorage) CreateOperationPreflight(ctx context.Context, req *CreateOperationPreflightReq) (*OperationPreflight, error) {
@@ -843,24 +847,32 @@ func (s *dbStorage) GetOperation(ctx context.Context, id int64) (*Operation, err
 	if err != nil {
 		return nil, err
 	}
+	operation.Status = canonicalOperationStatus(operation.Status)
 
 	return operation, nil
 }
 
 func (s *dbStorage) GetClusterHealthOperations(ctx context.Context, clusterID int64) ([]ClusterHealthOperation, error) {
 	const fields = `id, operation_type, operation_status, created_at, updated_at, safe_next_action`
-	return QueryRowsToStruct[ClusterHealthOperation](ctx, s.db, `
-		(select `+fields+` from operations where cluster_id = $1 and operation_status in ($2,$3)
+	operations, err := QueryRowsToStruct[ClusterHealthOperation](ctx, s.db, `
+		(select `+fields+` from operations where cluster_id = $1 and operation_status in ($2,$3,$4)
 		 order by created_at desc, id desc limit 1)
 		union
-		(select `+fields+` from operations where cluster_id = $1 and operation_status in ($4,$5,$6)
+		(select `+fields+` from operations where cluster_id = $1 and operation_status in ($5,$6,$7,$8)
 		 order by created_at desc, id desc limit 1)
 		union
-		(select `+fields+` from operations where cluster_id = $1 and operation_status = $5
+		(select `+fields+` from operations where cluster_id = $1 and operation_status = $7
 		 order by created_at desc, id desc limit 1)
 		order by created_at desc, id desc`,
-		clusterID, OperationStatusQueued, OperationStatusRunning, OperationStatusSucceeded,
-		OperationStatusFailed, OperationStatusCancelled)
+		clusterID, OperationStatusQueued, OperationStatusRunning, legacyOperationInProgress,
+		OperationStatusSucceeded, legacyOperationSuccess, OperationStatusFailed, OperationStatusCancelled)
+	if err != nil {
+		return nil, err
+	}
+	for i := range operations {
+		operations[i].Status = canonicalOperationStatus(operations[i].Status)
+	}
+	return operations, nil
 }
 
 func (s *dbStorage) UpsertBackupEvidence(ctx context.Context, evidence *BackupEvidence) error {
