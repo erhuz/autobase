@@ -24,7 +24,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "PGPASSWORD=test psql -h 127.0.0.1 -U postgres -d postgres -Atc 'select extversion from pg_extension where extname = ''timescaledb''' | grep -q ."
+          --health-cmd "PGPASSWORD=test psql -h 127.0.0.1 -U postgres -d postgres -Atc 'select extname from pg_extension' | grep -qx timescaledb"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10

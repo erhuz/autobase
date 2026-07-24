@@ -203,3 +203,4 @@ B59|2026-07-24|new lifecycle Go source missed canonical formatting; service gate
 B60|2026-07-24|`operation_preflights.operation_type` check constraint fixed at query-analytics types; ∀ other guarded preflight insert fails|V4,V51
 B61|2026-07-24|`v_operations` mapped `updated_at` to `finished` unguarded; running rows reported terminal timestamp in list API|V50
 B62|2026-07-24|plain PostgreSQL 17 migration gate missed TimescaleDB columnstore; guarded migration disabled hypertable trigger + rewrote compressed history|V53
+B63|2026-07-24|TimescaleDB health SQL lost nested shell quotes; production migration job stayed unhealthy|V53
