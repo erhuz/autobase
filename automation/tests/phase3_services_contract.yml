@@ -1,0 +1,41 @@
+# yamllint disable rule:line-length
+---
+- name: Verify guarded phase 3 service contracts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check allowlists, native roles, current-state capture, and live verification
+      ansible.builtin.assert:
+        that:
+          - native_config in playbook
+          - fixed_operations in playbook
+          - extension_allowlist in playbook
+          - extension_catalog in playbook
+          - package_availability in playbook
+          - pgbouncer_current_state in playbook
+          - pgbouncer_capacity_guard in native_precheck
+          - pgbouncer_file_verification in playbook
+          - pgbouncer_live_config in playbook
+          - pgbouncer_live_databases in playbook
+          - arbitrary_shell not in playbook
+          - arbitrary_package not in playbook
+          - cascade_drop not in playbook
+          - password_input not in playbook
+      vars:
+        playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/phase3_services.yml') }}"
+        native_precheck: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/pre_checks/tasks/pgbouncer.yml') }}"
+        native_config: "ansible.builtin.import_playbook: config_pgcluster.yml"
+        fixed_operations: "phase3_operation in ['extension_admin', 'pgbouncer_admin']"
+        extension_allowlist: "phase3_supported_extensions: [postgis, pgrouting, pg_repack, vector]"
+        extension_catalog: Verify extension catalog state
+        package_availability: Verify extension package availability
+        pgbouncer_current_state: Capture current PgBouncer configuration
+        pgbouncer_capacity_guard: pgbouncer_total_pool_size | int > max_connections
+        pgbouncer_file_verification: Verify applied PgBouncer file
+        pgbouncer_live_config: Read live PgBouncer configuration
+        pgbouncer_live_databases: Read live PgBouncer databases
+        arbitrary_shell: ansible.builtin.shell
+        arbitrary_package: phase3_package
+        cascade_drop: "cascade: true"
+        password_input: phase3_password

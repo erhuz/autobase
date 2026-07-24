@@ -52,6 +52,8 @@ const operationTypes = [
   'restore',
   'pitr',
   'database_admin',
+  'extension_admin',
+  'pgbouncer_admin',
 ];
 const operationStatuses = ['queued', 'running', 'succeeded', 'failed', 'cancelled'];
 const openEndedDate = '9999-12-31T23:59:59.999Z';

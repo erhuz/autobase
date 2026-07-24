@@ -350,7 +350,9 @@ export type RequestOperationPreflight = {
     | 'emergency_failover'
     | 'restore'
     | 'pitr'
-    | 'database_admin';
+    | 'database_admin'
+    | 'extension_admin'
+    | 'pgbouncer_admin';
   target?: string;
   params?: {
     postgresql_parameters?: Array<{ option: string; value: string }>;
@@ -387,6 +389,16 @@ export type RequestOperationPreflight = {
       | 'REFERENCES'
       | 'TRIGGER'
     >;
+    extension_action?: 'extension_present' | 'extension_absent';
+    extension?: 'postgis' | 'pgrouting' | 'pg_repack' | 'pgvector';
+    pgbouncer_action?: 'pool_present' | 'pool_absent' | 'limits_update';
+    pool_name?: string;
+    pool_size?: number;
+    pool_mode?: 'session' | 'transaction';
+    max_client_connections?: number;
+    max_database_connections?: number;
+    default_pool_size?: number;
+    query_wait_timeout?: number;
   };
 };
 export type RequestOperationStart = { preflight_id: number; confirmation: string };

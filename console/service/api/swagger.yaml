@@ -1084,7 +1084,7 @@ definitions:
     properties:
       type:
         type: string
-        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update, rolling_update, postgresql_upgrade, emergency_failover, restore, pitr, database_admin]
+        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update, rolling_update, postgresql_upgrade, emergency_failover, restore, pitr, database_admin, extension_admin, pgbouncer_admin]
       target:
         type: string
       params:
@@ -1150,6 +1150,46 @@ definitions:
         items:
           type: string
           enum: [CONNECT, CREATE, TEMPORARY, USAGE, SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER]
+      extension_action:
+        type: string
+        enum: [extension_present, extension_absent]
+      extension:
+        type: string
+        enum: [postgis, pgrouting, pg_repack, pgvector]
+      pgbouncer_action:
+        type: string
+        enum: [pool_present, pool_absent, limits_update]
+      pool_name:
+        type: string
+        pattern: '^[a-z_][a-z0-9_]{0,62}$'
+      pool_size:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 10000
+      pool_mode:
+        type: string
+        enum: [session, transaction]
+      max_client_connections:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 1000000
+      max_database_connections:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100000
+      default_pool_size:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 10000
+      query_wait_timeout:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 86400
 
   Request.PostgreSQLParameter:
     type: object

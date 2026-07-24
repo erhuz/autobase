@@ -33,6 +33,8 @@ const (
 	OperationTypeRestore               = "restore"
 	OperationTypePITR                  = "pitr"
 	OperationTypeDatabaseAdmin         = "database_admin"
+	OperationTypeExtensionAdmin        = "extension_admin"
+	OperationTypePgBouncerAdmin        = "pgbouncer_admin"
 
 	ClusterStatusFailed      = "failed"
 	ClusterStatusHealthy     = "healthy"

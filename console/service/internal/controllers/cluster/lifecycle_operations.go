@@ -261,6 +261,8 @@ func operationParams(operationType string, desired []byte) ([]byte, error) {
 		return recoveryOperationParams(operationType, desired)
 	case storage.OperationTypeDatabaseAdmin:
 		return databaseAdminOperationParams(desired)
+	case storage.OperationTypeExtensionAdmin, storage.OperationTypePgBouncerAdmin:
+		return phase3ServicesOperationParams(operationType, desired)
 	case storage.OperationTypeConfigUpdate:
 	default:
 		return nil, nil

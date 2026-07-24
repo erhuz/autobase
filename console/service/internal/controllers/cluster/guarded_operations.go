@@ -180,7 +180,8 @@ func supportedOperationType(operationType string) bool {
 		storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable,
 		storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate,
 		storage.OperationTypeRollingUpdate, storage.OperationTypePostgreSQLUpgrade, storage.OperationTypeEmergencyFailover,
-		storage.OperationTypeRestore, storage.OperationTypePITR, storage.OperationTypeDatabaseAdmin:
+		storage.OperationTypeRestore, storage.OperationTypePITR, storage.OperationTypeDatabaseAdmin,
+		storage.OperationTypeExtensionAdmin, storage.OperationTypePgBouncerAdmin:
 		return true
 	default:
 		return false
@@ -207,6 +208,8 @@ func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterIn
 		return h.recoveryPreflightState(ctx, clusterInfo, operationType, target, params)
 	case storage.OperationTypeDatabaseAdmin:
 		return h.databaseAdminPreflightState(ctx, clusterInfo, target, params)
+	case storage.OperationTypeExtensionAdmin, storage.OperationTypePgBouncerAdmin:
+		return h.phase3ServicesPreflightState(ctx, clusterInfo, operationType, target, params)
 	default:
 		return nil, errors.New("unsupported operation type")
 	}
@@ -242,6 +245,9 @@ func (h *guardedOperationsHandler) operationInputs(ctx context.Context, clusterI
 	case storage.OperationTypeDatabaseAdmin:
 		envs, extraVars, err := h.databaseAdminOperationInputs(ctx, clusterInfo, desired)
 		return envs, extraVars, databaseAdminPlaybook, err
+	case storage.OperationTypeExtensionAdmin, storage.OperationTypePgBouncerAdmin:
+		envs, extraVars, err := h.phase3ServicesOperationInputs(ctx, clusterInfo, operationType, desired)
+		return envs, extraVars, phase3ServicesPlaybook, err
 	default:
 		return nil, nil, "", errors.New("unsupported operation type")
 	}

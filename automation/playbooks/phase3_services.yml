@@ -1,0 +1,297 @@
+# yamllint disable rule:line-length
+---
+- name: vitabaks.autobase.phase3_services | Validate fixed request
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: always
+  vars:
+    phase3_identifier_pattern: '^[a-z_][a-z0-9_]{0,62}$'
+    phase3_supported_extensions: [postgis, pgrouting, pg_repack, vector]
+  tasks:
+    - name: Require supported phase 3 service inputs
+      ansible.builtin.assert:
+        that:
+          - phase3_operation in ['extension_admin', 'pgbouncer_admin']
+          - phase3_primary in groups.get('postgres_cluster', [])
+          - phase3_nodes | length > 0
+          - phase3_nodes | unique | length == phase3_nodes | length
+          - phase3_nodes | difference(groups.get('postgres_cluster', [])) | length == 0
+          - groups.get('postgres_cluster', []) | difference(phase3_nodes) | length == 0
+          - phase3_operation != 'extension_admin' or phase3_extension_action in ['extension_present', 'extension_absent']
+          - phase3_operation != 'extension_admin' or phase3_extension in phase3_supported_extensions
+          - >-
+            phase3_operation != 'extension_admin' or
+            phase3_extension_database is match(phase3_identifier_pattern)
+          - >-
+            phase3_operation != 'extension_admin' or
+            phase3_extension_action != 'extension_present' or
+            phase3_extension_schema is match(phase3_identifier_pattern)
+          - >-
+            phase3_operation != 'extension_admin' or
+            phase3_extension_action != 'extension_absent' or
+            phase3_extension_schema | length == 0
+          - phase3_operation != 'pgbouncer_admin' or phase3_pgbouncer_action in ['pool_present', 'pool_absent', 'limits_update']
+          - phase3_operation != 'pgbouncer_admin' or pgbouncer_max_client_conn | int > 0
+          - phase3_operation != 'pgbouncer_admin' or pgbouncer_max_db_connections | int > 0
+          - phase3_operation != 'pgbouncer_admin' or pgbouncer_default_pool_size | int > 0
+          - phase3_operation != 'pgbouncer_admin' or pgbouncer_query_wait_timeout | int > 0
+          - >-
+            phase3_operation != 'pgbouncer_admin' or
+            pgbouncer_pools | map(attribute='name') |
+            select('match', phase3_identifier_pattern) | list | length == pgbouncer_pools | length
+          - >-
+            phase3_operation != 'pgbouncer_admin' or
+            pgbouncer_pools | map(attribute='dbname') |
+            select('match', phase3_identifier_pattern) | list | length == pgbouncer_pools | length
+          - >-
+            phase3_operation != 'pgbouncer_admin' or
+            pgbouncer_pools | map(attribute='name') | unique | list | length == pgbouncer_pools | length
+          - >-
+            phase3_operation != 'pgbouncer_admin' or
+            phase3_pgbouncer_action not in ['pool_present', 'pool_absent'] or
+            phase3_pool_name is match(phase3_identifier_pattern)
+          - >-
+            phase3_operation != 'pgbouncer_admin' or
+            phase3_pgbouncer_action != 'pool_present' or
+            phase3_pool_database is match(phase3_identifier_pattern)
+          - >-
+            phase3_operation != 'pgbouncer_admin' or
+            phase3_pgbouncer_action != 'pool_present' or
+            phase3_pool_size | int > 0
+          - >-
+            phase3_operation != 'pgbouncer_admin' or
+            phase3_pgbouncer_action != 'pool_present' or
+            phase3_pool_mode in ['session', 'transaction']
+          - >-
+            phase3_operation != 'pgbouncer_admin' or
+            phase3_pgbouncer_action != 'pool_present' or
+            pgbouncer_pools | selectattr('name', 'equalto', phase3_pool_name) | list | length == 1
+          - >-
+            phase3_operation != 'pgbouncer_admin' or
+            phase3_pgbouncer_action != 'pool_absent' or
+            pgbouncer_pools | selectattr('name', 'equalto', phase3_pool_name) | list | length == 0
+
+    - name: Select phase 3 primary
+      ansible.builtin.add_host:
+        name: "{{ phase3_primary }}"
+        groups: phase3_primary
+      changed_when: false
+
+    - name: Select phase 3 PostgreSQL nodes
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: phase3_verify
+      loop: "{{ phase3_nodes }}"
+      changed_when: false
+
+- name: vitabaks.autobase.phase3_services | Capture current live state
+  hosts: phase3_verify
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tags: phase3_services
+  tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Capture current extension state
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: "{{ phase3_extension_database }}"
+        query: >-
+          SELECT e.extname, n.nspname AS schema
+          FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
+          WHERE e.extname = %(extension)s
+        named_args:
+          extension: "{{ phase3_extension }}"
+      changed_when: false
+      when: phase3_operation == 'extension_admin'
+
+    - name: Capture current PgBouncer configuration
+      ansible.builtin.slurp:
+        src: "{{ pgbouncer_conf_dir }}/pgbouncer.ini"
+      changed_when: false
+      no_log: true
+      when: phase3_operation == 'pgbouncer_admin'
+
+- name: vitabaks.autobase.phase3_services | Apply native supported roles
+  ansible.builtin.import_playbook: config_pgcluster.yml
+
+- name: vitabaks.autobase.phase3_services | Verify live state
+  hosts: phase3_verify
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tags: phase3_services
+  tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Verify extension package availability
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: postgres
+        query: >-
+          SELECT count(*)::int AS matches
+          FROM pg_available_extensions WHERE name = %(extension)s
+        named_args:
+          extension: "{{ phase3_extension }}"
+      register: phase3_extension_available
+      changed_when: false
+      failed_when: phase3_extension_available.query_result[0].matches | int != 1
+      when:
+        - phase3_operation == 'extension_admin'
+        - phase3_extension_action == 'extension_present'
+
+    - name: Verify extension catalog state
+      become_user: postgres
+      community.postgresql.postgresql_query:
+        login_host: "127.0.0.1"
+        login_port: "{{ postgresql_port }}"
+        login_user: "{{ patroni_superuser_username }}"
+        login_password: "{{ patroni_superuser_password }}"
+        login_db: "{{ phase3_extension_database }}"
+        query: >-
+          SELECT count(*)::int AS matches
+          FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
+          WHERE e.extname = %(extension)s
+          AND (%(action)s = 'extension_absent' OR n.nspname = %(schema)s)
+        named_args:
+          action: "{{ phase3_extension_action }}"
+          extension: "{{ phase3_extension }}"
+          schema: "{{ phase3_extension_schema }}"
+      register: phase3_extension_catalog
+      changed_when: false
+      failed_when: >-
+        phase3_extension_catalog.query_result[0].matches | int !=
+        (0 if phase3_extension_action == 'extension_absent' else 1)
+      when: phase3_operation == 'extension_admin'
+
+    - name: Read applied PgBouncer configuration
+      ansible.builtin.slurp:
+        src: "{{ pgbouncer_conf_dir }}/pgbouncer.ini"
+      register: phase3_pgbouncer_config
+      changed_when: false
+      no_log: true
+      when: phase3_operation == 'pgbouncer_admin'
+
+    - name: Verify applied PgBouncer file
+      ansible.builtin.assert:
+        that:
+          - >-
+            (phase3_pgbouncer_config.content | b64decode) is
+            search('(?m)^max_client_conn = ' ~ (pgbouncer_max_client_conn | string) ~ '$')
+          - >-
+            (phase3_pgbouncer_config.content | b64decode) is
+            search('(?m)^max_db_connections = ' ~ (pgbouncer_max_db_connections | string) ~ '$')
+          - >-
+            (phase3_pgbouncer_config.content | b64decode) is
+            search('(?m)^default_pool_size = ' ~ (pgbouncer_default_pool_size | string) ~ '$')
+          - >-
+            (phase3_pgbouncer_config.content | b64decode) is
+            search('(?m)^query_wait_timeout = ' ~ (pgbouncer_query_wait_timeout | string) ~ '$')
+          - >-
+            phase3_pgbouncer_action != 'pool_present' or
+            (phase3_pgbouncer_config.content | b64decode) is
+            search('(?m)^' ~ phase3_pool_name ~ ' = [^\n]*dbname=' ~ phase3_pool_database ~ '(?: |$)')
+          - >-
+            phase3_pgbouncer_action != 'pool_present' or
+            (phase3_pgbouncer_config.content | b64decode) is
+            search('(?m)^' ~ phase3_pool_name ~ ' = [^\n]*pool_size=' ~ (phase3_pool_size | string) ~ '(?: |$)')
+          - >-
+            phase3_pgbouncer_action != 'pool_present' or
+            (phase3_pgbouncer_config.content | b64decode) is
+            search('(?m)^' ~ phase3_pool_name ~ ' = [^\n]*pool_mode=' ~ phase3_pool_mode ~ '(?: |$)')
+          - >-
+            phase3_pgbouncer_action != 'pool_absent' or
+            (phase3_pgbouncer_config.content | b64decode) is not
+            search('(?m)^' ~ phase3_pool_name ~ ' = ')
+      when: phase3_operation == 'pgbouncer_admin'
+
+    - name: Read live PgBouncer configuration
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - "{{ postgresql_bin_dir }}/psql"
+          - "-h"
+          - /var/run/pgbouncer
+          - "-p"
+          - "{{ pgbouncer_listen_port | string }}"
+          - "-U"
+          - "{{ patroni_superuser_username }}"
+          - "-d"
+          - pgbouncer
+          - "-tA"
+          - "-F"
+          - "|"
+          - "-c"
+          - SHOW CONFIG
+      environment:
+        PGPASSWORD: "{{ patroni_superuser_password }}"
+      register: phase3_pgbouncer_live_config
+      changed_when: false
+      no_log: true
+      when: phase3_operation == 'pgbouncer_admin'
+
+    - name: Read live PgBouncer databases
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - "{{ postgresql_bin_dir }}/psql"
+          - "-h"
+          - /var/run/pgbouncer
+          - "-p"
+          - "{{ pgbouncer_listen_port | string }}"
+          - "-U"
+          - "{{ patroni_superuser_username }}"
+          - "-d"
+          - pgbouncer
+          - "-tA"
+          - "-F"
+          - "|"
+          - "-c"
+          - SHOW DATABASES
+      environment:
+        PGPASSWORD: "{{ patroni_superuser_password }}"
+      register: phase3_pgbouncer_live_databases
+      changed_when: false
+      no_log: true
+      when: phase3_operation == 'pgbouncer_admin'
+
+    - name: Verify live PgBouncer state
+      ansible.builtin.assert:
+        that:
+          - >-
+            ('max_client_conn|' ~ (pgbouncer_max_client_conn | string) ~ '|') in
+            phase3_pgbouncer_live_config.stdout
+          - >-
+            ('max_db_connections|' ~ (pgbouncer_max_db_connections | string) ~ '|') in
+            phase3_pgbouncer_live_config.stdout
+          - >-
+            ('default_pool_size|' ~ (pgbouncer_default_pool_size | string) ~ '|') in
+            phase3_pgbouncer_live_config.stdout
+          - >-
+            ('query_wait_timeout|' ~ (pgbouncer_query_wait_timeout | string) ~ '|') in
+            phase3_pgbouncer_live_config.stdout
+          - >-
+            phase3_pgbouncer_action != 'pool_present' or
+            phase3_pgbouncer_live_databases.stdout_lines |
+            select('match', '^' ~ phase3_pool_name ~ '\|') | list | length == 1
+          - >-
+            phase3_pgbouncer_action != 'pool_absent' or
+            phase3_pgbouncer_live_databases.stdout_lines |
+            select('match', '^' ~ phase3_pool_name ~ '\|') | list | length == 0
+      when: phase3_operation == 'pgbouncer_admin'
