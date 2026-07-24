@@ -97,6 +97,7 @@ V47: checkout-safe Go gate targets committed packages; full service gate runs af
 V48: query-performance filters have programmatic labels + keyboard-operable native controls.
 V49: query-performance refresh/filter change advances window end; stale window refetch ⊥.
 V50: operation `finished` timestamp ∃ iff status ∈ `succeeded,failed,cancelled`.
+V51: ∀ supported operation type → preflight persistence + schema constraints accept it; integration test exercises ≥1 non-analytics type against real schema.
 
 ## §T
 
@@ -123,6 +124,8 @@ T19|x|add analytics Console DB schema + migration/storage tests|V12,V13,V14,V40,
 T20|x|add all-node PGSM collector + query-performance APIs|V34,V39,V40,V41,V42,V43,V44,V45,I.api.query,I.db.query,I.verify
 T21|x|add query-performance UI + status/filter/trend/detail tests|V34,V42,V43,V44,V45,V48,V49,I.ui.query,I.api.query,I.verify
 T22|x|add guarded PGSM enable/disable preflight + serial HA operation|V4,V5,V19,V20,V21,V22,V24,V34,V36,V37,V38,V39,V40,V44,V45,V50,I.api.preflight,I.api.run,I.api.ops,I.op.v1,I.automation.query,I.verify
+T23|x|widen `operation_preflights.operation_type` constraint to all supported types + non-analytics preflight integration test|V4,V32,V51,I.db,I.api.preflight
+T24|.|guard operations-list `finished` to terminal states|V50,I.api.ops
 
 ## §B
 
@@ -178,7 +181,6 @@ B48|2026-07-23|standalone replica-reinit syntax gate lacked repo collection layo
 B49|2026-07-23|Ansible Galaxy install used read-only default cache despite temp dirs|V45
 B50|2026-07-23|UI API generator targeted absent obsolete directory + returned success without output|V47
 B51|2026-07-23|backup observer startup omitted controller import; full generated-source service gate failed|V47
-B52|2026-07-24|new lifecycle Go source missed canonical formatting; service gate stopped before tests|V47
 B52|2026-07-23|ansible-lint 26.4 made intentional play-level become + linear run-once patterns fatal; CI failed|V45
 B53|2026-07-23|CI installed Python 3.14 but bootstrap silently selected stale 3.12 pin|V45
 B54|2026-07-24|focused lifecycle Go gate ran before Swagger generation|V47
@@ -186,3 +188,6 @@ B55|2026-07-24|Ansible lint gate ran before required `.venv` bootstrap|V45
 B56|2026-07-24|local Playwright web server invoked unavailable `yarn` shim|V45
 B57|2026-07-24|local Playwright gate ran before Chromium bundle install|V45
 B58|2026-07-24|restore syntax gate ran before declared Automation collections installed|V45
+B59|2026-07-24|new lifecycle Go source missed canonical formatting; service gate stopped before tests|V47
+B60|2026-07-24|`operation_preflights.operation_type` check constraint fixed at query-analytics types; ∀ other guarded preflight insert fails|V4,V51
+B61|2026-07-24|`v_operations` mapped `updated_at` to `finished` unguarded; running rows reported terminal timestamp in list API|V50

@@ -14,7 +14,7 @@
     "console_db": {
       "path": "console/db",
       "version_source": "release_tag",
-      "migration_head": 20260723120000
+      "migration_head": 20260724120000
     },
     "automation": {
       "path": "automation",

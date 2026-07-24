@@ -53,13 +53,17 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 		t.Fatalf("backup evidence = %+v, %v", backupEvidence, err)
 	}
 
-	preflight, err := store.CreateOperationPreflight(ctx, &CreateOperationPreflightReq{
-		ClusterID: cluster.ID, Type: OperationTypeQueryAnalyticsDisable, Observed: []byte(`{"token":"cleartext"}`), Desired: []byte(`{}`),
+	preflightReq := &CreateOperationPreflightReq{
+		ClusterID: cluster.ID, Type: OperationTypeSwitchover, Observed: []byte(`{"token":"cleartext"}`), Desired: []byte(`{}`),
 		Checks: []byte(`[]`), Blockers: []byte(`[]`), Plan: []byte(`[]`), AffectedNodes: []byte(`[]`),
-		Confirmation: "DISABLE QUERY ANALYTICS", TopologyHash: "hash", ExpiresAt: time.Now().Add(time.Minute),
-	})
+		Confirmation: "SWITCHOVER TO postgresql-2", TopologyHash: "hash", ExpiresAt: time.Now().Add(time.Minute),
+	}
+	preflight, err := store.CreateOperationPreflight(ctx, preflightReq)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if preflight.Type != OperationTypeSwitchover {
+		t.Fatalf("preflight type = %q", preflight.Type)
 	}
 	var observed map[string]any
 	if err = json.Unmarshal(preflight.Observed, &observed); err != nil || observed["token"] != "[REDACTED]" {
@@ -70,6 +74,11 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 	}
 	if consumed, err := store.ConsumeOperationPreflight(ctx, preflight.ID); err != nil || consumed {
 		t.Fatalf("second consume = %v, %v", consumed, err)
+	}
+	unsupported := *preflightReq
+	unsupported.Type = "unsupported"
+	if _, err = store.CreateOperationPreflight(ctx, &unsupported); err == nil {
+		t.Fatal("unsupported preflight operation type was accepted")
 	}
 
 	req := CreateOperationReq{
