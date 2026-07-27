@@ -108,6 +108,7 @@ V54: ∀ Automation-backed mutation → attached same-project `ssh_key|password`
 V55: release built from tagged source commit; workflow source edits/commits ⊥; §I.release.manifest pins base, head, platform, official DB + published UI/API/Automation digests.
 V56: cluster detail → route-backed `{overview,query-performance,access}`; overview keeps availability ≠ recoverability + health/node triage; tab-only data loads active route; controls keyboard-native.
 V57: viewport ≤600px → sidebar width = 60px + cluster tabs/content reachable; horizontal content clipping ⊥.
+V58: query analytics enable|disable preserves effective preload + HBA when Patroni DCS omits either; collector rules scoped + reversible.
 
 ## §T
 
@@ -224,3 +225,4 @@ B75|2026-07-27|focused E2E server used default auth token while fixture injected
 B76|2026-07-27|restricted sandbox denied corrected Vite localhost bind until elevated|V45
 B77|2026-07-27|new node-state chip repeated ES2021 `replaceAll` under ES2020 compiler target|V56
 B78|2026-07-27|copy button disabled empty values visually but passed optional value to clipboard hook|V56
+B79|2026-07-27|query analytics required DCS `pg_hba`; Autobase/imported clusters keep effective rules in local `pg_hba.conf`|V58

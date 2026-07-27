@@ -71,7 +71,6 @@
           - serial_restart in restart_playbook
           - switchover in restart_playbook
           - redaction in operation_playbook
-          - preserved_hba in operation_playbook
           - safe_role_recheck in switchover_tasks
           - "switchover_tasks | regex_findall('ignore_errors: true') | length == 1"
       vars:
@@ -88,5 +87,16 @@
         serial_restart: "serial: 1"
         switchover: "tasks_from: switchover"
         redaction: "no_log: true"
-        preserved_hba: "Cannot safely preserve pg_hba and shared_preload_libraries"
         safe_role_recheck: "status_code: [200, 503]"
+
+    - name: Check V58 imported-cluster configuration fallback
+      ansible.builtin.assert:
+        that:
+          - dcs_hba_required not in operation_playbook
+          - effective_preload in operation_playbook
+          - local_hba_fallback in operation_playbook
+      vars:
+        operation_playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/query_analytics.yml') }}"
+        dcs_hba_required: query_analytics_dcs.json.postgresql.pg_hba is defined
+        effective_preload: show shared_preload_libraries
+        local_hba_fallback: "ANSIBLE: AUTObase query analytics collector"

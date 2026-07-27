@@ -70,21 +70,27 @@
       no_log: true
       when: inventory_hostname == groups['postgres_cluster'][0]
 
-    - name: Require preservable Patroni configuration
-      ansible.builtin.assert:
-        that:
-          - query_analytics_dcs.json.postgresql.pg_hba is defined
-          - query_analytics_dcs.json.postgresql.pg_hba | length > 0
-          - query_analytics_dcs.json.postgresql.parameters.shared_preload_libraries is defined
-        fail_msg: Cannot safely preserve pg_hba and shared_preload_libraries from Patroni DCS.
+    - name: Read effective shared preload libraries
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -Atqc
+          - show shared_preload_libraries
+      register: query_analytics_effective_preload
+      changed_when: false
+      check_mode: false
       when: inventory_hostname == groups['postgres_cluster'][0]
 
     - name: Build preserved query analytics configuration
       ansible.builtin.set_fact:
+        query_analytics_dcs_has_hba: >-
+          {{ query_analytics_dcs.json.postgresql.pg_hba | default([]) | length > 0 }}
         query_analytics_preload: >-
           {{
             (
-              (query_analytics_dcs.json.postgresql.parameters.shared_preload_libraries | default('')).split(',')
+              (query_analytics_dcs.json.postgresql.parameters.shared_preload_libraries
+                | default(query_analytics_effective_preload.stdout, true)).split(',')
               | map('trim') | reject('equalto', '') | reject('equalto', 'pg_stat_monitor') | list
               + (['pg_stat_monitor'] if query_analytics_state == 'enabled' else [])
             ) | join(',')
@@ -113,6 +119,52 @@
         - inventory_hostname == groups['postgres_cluster'][0]
         - query_analytics_state == 'enabled'
 
+    - name: Build Patroni query analytics parameters
+      ansible.builtin.set_fact:
+        query_analytics_parameters:
+          shared_preload_libraries: "{{ query_analytics_preload }}"
+          pg_stat_monitor.pgsm_max: "{{ 256 if query_analytics_state == 'enabled' else none }}"
+          pg_stat_monitor.pgsm_max_buckets: "{{ 10 if query_analytics_state == 'enabled' else none }}"
+          pg_stat_monitor.pgsm_bucket_time: "{{ 60 if query_analytics_state == 'enabled' else none }}"
+          pg_stat_monitor.pgsm_query_max_len: "{{ 2048 if query_analytics_state == 'enabled' else none }}"
+          pg_stat_monitor.pgsm_normalized_query: "{{ 'on' if query_analytics_state == 'enabled' else none }}"
+          pg_stat_monitor.pgsm_track_application_names: "{{ 'on' if query_analytics_state == 'enabled' else none }}"
+          pg_stat_monitor.pgsm_enable_pgsm_query_id: "{{ 'on' if query_analytics_state == 'enabled' else none }}"
+          pg_stat_monitor.pgsm_track_utility: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
+          pg_stat_monitor.pgsm_track_planning: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
+          pg_stat_monitor.pgsm_extract_comments: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
+          pg_stat_monitor.pgsm_enable_query_plan: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
+      when: inventory_hostname == groups['postgres_cluster'][0]
+
+    - name: Preserve local HBA while managing collector rules
+      ansible.builtin.blockinfile:
+        path: "{{ postgresql_conf_dir }}/pg_hba.conf"
+        marker: "# {mark} ANSIBLE: AUTObase query analytics collector"
+        insertbefore: BOF
+        block: |
+          {% for cidr in query_analytics_collector_cidrs | default([]) %}
+          host postgres {{ query_analytics_monitor_username }} {{ cidr }} scram-sha-256
+          {% endfor %}
+          host all {{ query_analytics_monitor_username }} 0.0.0.0/0 reject
+          host all {{ query_analytics_monitor_username }} ::/0 reject
+        state: >-
+          {{ 'present'
+             if query_analytics_state == 'enabled'
+                and not hostvars[groups['postgres_cluster'][0]].query_analytics_dcs_has_hba
+             else 'absent' }}
+
+    - name: Validate preserved local HBA
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -Atqc
+          - select count(*) from pg_hba_file_rules where error is not null
+      register: query_analytics_hba_validation
+      changed_when: false
+      failed_when: query_analytics_hba_validation.rc != 0 or query_analytics_hba_validation.stdout != '0'
+      when: not hostvars[groups['postgres_cluster'][0]].query_analytics_dcs_has_hba
+
     - name: Add signed Percona repository
       ansible.builtin.import_role:
         name: vitabaks.autobase.add_repository
@@ -137,21 +189,14 @@
         force_basic_auth: "{{ patroni_restapi_username | default('') | length > 0 }}"
         body_format: json
         body:
-          postgresql:
-            pg_hba: "{{ query_analytics_hba }}"
-            parameters:
-              shared_preload_libraries: "{{ query_analytics_preload }}"
-              pg_stat_monitor.pgsm_max: "{{ 256 if query_analytics_state == 'enabled' else none }}"
-              pg_stat_monitor.pgsm_max_buckets: "{{ 10 if query_analytics_state == 'enabled' else none }}"
-              pg_stat_monitor.pgsm_bucket_time: "{{ 60 if query_analytics_state == 'enabled' else none }}"
-              pg_stat_monitor.pgsm_query_max_len: "{{ 2048 if query_analytics_state == 'enabled' else none }}"
-              pg_stat_monitor.pgsm_normalized_query: "{{ 'on' if query_analytics_state == 'enabled' else none }}"
-              pg_stat_monitor.pgsm_track_application_names: "{{ 'on' if query_analytics_state == 'enabled' else none }}"
-              pg_stat_monitor.pgsm_enable_pgsm_query_id: "{{ 'on' if query_analytics_state == 'enabled' else none }}"
-              pg_stat_monitor.pgsm_track_utility: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
-              pg_stat_monitor.pgsm_track_planning: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
-              pg_stat_monitor.pgsm_extract_comments: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
-              pg_stat_monitor.pgsm_enable_query_plan: "{{ 'off' if query_analytics_state == 'enabled' else none }}"
+          postgresql: >-
+            {{
+              {'parameters': query_analytics_parameters}
+              | combine(
+                  {'pg_hba': query_analytics_hba}
+                  if query_analytics_dcs_has_hba else {}
+                )
+            }}
         status_code: 200
         ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
       no_log: true
