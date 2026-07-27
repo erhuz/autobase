@@ -15,6 +15,8 @@ const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(localStorage.getItem('isSidebarCollapsed')?.toString() === 'true');
 
   const isLesserThan1600 = useMediaQuery('(max-width: 1600px)');
+  const isMobile = useMediaQuery('(max-width: 600px)');
+  const displayCollapsed = isMobile || isCollapsed;
 
   // Track whether sidebar was force-collapsed by the SQL Editor route
   const prevIsSqlEditorRef = useRef(false);
@@ -42,7 +44,11 @@ const Sidebar = () => {
   };
 
   useEffect(() => {
-    if ((!isCollapsed && isLesserThan1600) || (isCollapsed && !isLesserThan1600)) toggleSidebarCollapse();
+    setIsCollapsed((current) => {
+      if (current === isLesserThan1600) return current;
+      localStorage.setItem('isSidebarCollapsed', String(isLesserThan1600));
+      return isLesserThan1600;
+    });
   }, [isLesserThan1600]);
 
   // Auto-collapse sidebar when entering SQL Editor route, restore when leaving
@@ -68,13 +74,12 @@ const Sidebar = () => {
     <Drawer
       variant="permanent"
       sx={{
-        width: isCollapsed ? COLLAPSED_SIDEBAR_WIDTH : OPEN_SIDEBAR_WIDTH,
+        width: displayCollapsed ? COLLAPSED_SIDEBAR_WIDTH : OPEN_SIDEBAR_WIDTH,
         flexShrink: 0,
         overflow: 'auto',
         [`& .MuiDrawer-paper`]: {
-          width: isCollapsed ? COLLAPSED_SIDEBAR_WIDTH : OPEN_SIDEBAR_WIDTH,
+          width: displayCollapsed ? COLLAPSED_SIDEBAR_WIDTH : OPEN_SIDEBAR_WIDTH,
           boxSizing: 'border-box',
-          transition: 'width .1s ease-in-out',
         },
       }}>
       <Toolbar sx={{ minHeight: `${HEADER_HEIGHT} !important` }} />
@@ -85,7 +90,7 @@ const Sidebar = () => {
               key={item.label + item.path}
               {...item}
               isActive={isActive(item.path)}
-              isCollapsed={isCollapsed}
+              isCollapsed={displayCollapsed}
             />
           ))}
         </List>
@@ -93,27 +98,30 @@ const Sidebar = () => {
         <Divider flexItem />
         <List sx={{ width: '100%', padding: '8px 0 8px 0' }}>
           {sidebarLowData(t).map((item) => (
-            <SidebarItem key={item.label + item.path} isCollapsed={isCollapsed} target="_blank" {...item} />
+            <SidebarItem key={item.label + item.path} isCollapsed={displayCollapsed} target="_blank" {...item} />
           ))}
         </List>
         <Divider flexItem />
-        <IconButton
-          sx={{
-            width: '100%',
-            transform: isCollapsed ? 'scale(-1, 1)' : 'none',
-            transition: 'transform .1s ease-in-out',
-            borderRadius: 0,
-            color: 'text.primary',
-            '&:hover': {
-              backgroundColor: 'action.hover',
-            },
-            '& svg': {
-              fill: 'currentColor',
-            },
-          }}
-          onClick={toggleSidebarCollapse}>
-          <CollapseIcon width="24px" height="24px" />
-        </IconButton>
+        {!isMobile && (
+          <IconButton
+            aria-label={t(isCollapsed ? 'expandSidebar' : 'collapseSidebar')}
+            sx={{
+              width: '100%',
+              transform: isCollapsed ? 'scale(-1, 1)' : 'none',
+              transition: 'transform .1s ease-in-out',
+              borderRadius: 0,
+              color: 'text.primary',
+              '&:hover': {
+                backgroundColor: 'action.hover',
+              },
+              '& svg': {
+                fill: 'currentColor',
+              },
+            }}
+            onClick={toggleSidebarCollapse}>
+            <CollapseIcon width="24px" height="24px" />
+          </IconButton>
+        )}
       </Stack>
     </Drawer>
   );

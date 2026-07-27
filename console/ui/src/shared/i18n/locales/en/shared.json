@@ -44,6 +44,11 @@
   "add": "Add",
   "defaultTableSearchPlaceholder": "Enter property name or value",
   "address": "Address",
+  "copyToClipboard": "Copy to clipboard",
+  "showPassword": "Show password",
+  "hidePassword": "Hide password",
+  "collapseSidebar": "Collapse sidebar",
+  "expandSidebar": "Expand sidebar",
   "theme": {
     "changeTheme": "Change theme",
     "light": "Light",

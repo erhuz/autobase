@@ -6,7 +6,15 @@ const routerClustersPathsConfig = {
   },
   overview: {
     absolutePath: '/clusters/:clusterId/overview',
-    relativePath: ':clusterId/overview',
+    relativePath: 'overview',
+  },
+  queryPerformance: {
+    absolutePath: '/clusters/:clusterId/query-performance',
+    relativePath: 'query-performance',
+  },
+  access: {
+    absolutePath: '/clusters/:clusterId/access',
+    relativePath: 'access',
   },
 };
 

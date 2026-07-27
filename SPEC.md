@@ -27,9 +27,10 @@ C15: implementation extends existing Swagger, Go service/storage/watchers, React
 ## §I
 
 doc: `MANAGEMENT_VISION.md` → product authority for scope, phases, safety, success.
-ui.health: `/clusters/:clusterId/overview` → topology + DCS + routing + backup + operation summary + guarded action entry.
+ui.health: `/clusters/:clusterId/overview` → triage-first availability/recoverability + topology + DCS + routing + backup + operation summary + guarded action entry.
 ui.ops: `/operations` + `/operations/:operationId/log` → queue/state/filter/detail/log/failure/verification.
 ui.query: `/clusters/:clusterId/query-performance` → state/coverage/filter/KPI/trend/top-query/detail/enable/disable.
+ui.access: `/clusters/:clusterId/access` → connection values + management credential attach/manage.
 api.health: `GET /clusters/{id}/health` → `{observed_at,topology,dcs,routing,backup,operation,recoverability}`.
 api.query: `GET /clusters/{id}/query-performance` + `GET /clusters/{id}/query-performance/{fingerprintId}` → `{status,coverage,summary,series,queries|fingerprint,filters?,histogram?}`.
 api.preflight: `POST /clusters/{id}/preflights` `{type,target?,params?}` → `{id,observed,desired,checks,blockers,plan,affected_nodes,confirmation}`.
@@ -105,6 +106,8 @@ V52: I.image publish auth = GitHub Actions `GITHUB_TOKEN` + `packages:write`; an
 V53: stock `2.9.0` upgrade gate = production Console DB PostgreSQL 16 + TimescaleDB columnstore hypertable + compressed legacy operations; raw history/timestamps preserved; external status canonical; migration succeeds.
 V54: ∀ Automation-backed mutation → attached same-project `ssh_key|password` secret !; absent/invalid credential blocks preflight + execution.
 V55: release built from tagged source commit; workflow source edits/commits ⊥; §I.release.manifest pins base, head, platform, official DB + published UI/API/Automation digests.
+V56: cluster detail → route-backed `{overview,query-performance,access}`; overview keeps availability ≠ recoverability + health/node triage; tab-only data loads active route; controls keyboard-native.
+V57: viewport ≤600px → sidebar width = 60px + cluster tabs/content reachable; horizontal content clipping ⊥.
 
 ## §T
 
@@ -137,6 +140,7 @@ T25|x|cut image publishing + current pulls to public GHCR|V11,V15,V52,I.image,I.
 T26|x|repair stock `2.9.0` TimescaleDB migration + legacy operation compatibility|V12,V13,V14,V20,V21,V32,V45,V50,V53,I.db,I.release,I.verify
 T27|x|add imported-cluster credential attach + shared management blocker|V3,V4,V9,V18,V22,V32,V44,V54,I.api.credential,I.api.preflight,I.api.run
 T28|x|cut reproducible `2.9.0-management.1` release manifest + official DB retention|V11,V12,V14,V15,V46,V47,V52,V55,I.image,I.release,I.release.manifest,I.verify
+T29|x|redesign cluster detail into triage-first tabs + route-scoped data|V11,V16,V17,V26,V43,V48,V56,V57,I.ui.health,I.ui.query,I.ui.access,I.api.health,I.api.query,I.api.credential,I.verify
 
 ## §B
 
@@ -204,3 +208,18 @@ B60|2026-07-24|`operation_preflights.operation_type` check constraint fixed at q
 B61|2026-07-24|`v_operations` mapped `updated_at` to `finished` unguarded; running rows reported terminal timestamp in list API|V50
 B62|2026-07-24|plain PostgreSQL 17 migration gate missed TimescaleDB columnstore; guarded migration disabled hypertable trigger + rewrote compressed history|V53
 B63|2026-07-24|TimescaleDB health SQL lost nested shell quotes; production migration job stayed unhealthy|V53
+B64|2026-07-27|health test required standalone leader text after detail compaction|V16
+B65|2026-07-27|restricted sandbox blocked Chromium sandbox host before E2E launch|V45
+B66|2026-07-27|permanent 220px sidebar clipped cluster content @ phone viewport|V57
+B67|2026-07-27|health timestamp interpolation escaped locale date slashes into visible entities|V16
+B68|2026-07-27|copy control kept unused hook-state destructure; lint failed|V56
+B69|2026-07-27|full UI lint blocked by 42 pre-existing out-of-scope errors|V45
+B70|2026-07-27|parallel UI gates killed `tsc --noEmit` with exit 143 before diagnostics|V45
+B71|2026-07-27|serial whole-tree `tsc --noEmit` hung >4m without diagnostics|V45
+B72|2026-07-27|bounded T29 typecheck timed out under default + 8GiB heaps without diagnostics|V45
+B73|2026-07-27|cluster shell used ES2021 `replaceAll` + numeric router params under ES2020/string route contract|V56
+B74|2026-07-27|final UI gate guessed absent `npm test` script + stale router paths instead of live package/status|V45
+B75|2026-07-27|focused E2E server used default auth token while fixture injected management token; app correctly rejected fixture|V45
+B76|2026-07-27|restricted sandbox denied corrected Vite localhost bind until elevated|V45
+B77|2026-07-27|new node-state chip repeated ES2021 `replaceAll` under ES2020 compiler target|V56
+B78|2026-07-27|copy button disabled empty values visually but passed optional value to clipboard hook|V56

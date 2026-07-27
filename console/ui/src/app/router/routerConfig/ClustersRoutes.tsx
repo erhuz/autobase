@@ -4,7 +4,10 @@ import RouterPaths from '@app/router/routerPathsConfig';
 
 const Clusters = lazy(() => import('@pages/clusters'));
 const AddCluster = lazy(() => import('@pages/add-cluster'));
+const ClusterDetails = lazy(() => import('@pages/cluster-details'));
 const OverviewCluster = lazy(() => import('@pages/overview-cluster'));
+const ClusterQueryPerformance = lazy(() => import('@pages/cluster-query-performance'));
+const ClusterAccess = lazy(() => import('@pages/cluster-access'));
 
 const ClustersRoutes = () => (
   <Route>
@@ -23,13 +26,29 @@ const ClustersRoutes = () => (
         }}
         element={<AddCluster />}
       />
-      <Route
-        path={RouterPaths.clusters.overview.relativePath}
-        handle={{
-          breadcrumb: { label: 'overview', ns: 'shared' },
-        }}
-        element={<OverviewCluster />}
-      />
+      <Route path=":clusterId" element={<ClusterDetails />}>
+        <Route
+          path={RouterPaths.clusters.overview.relativePath}
+          handle={{
+            breadcrumb: { label: 'overview', ns: 'shared' },
+          }}
+          element={<OverviewCluster />}
+        />
+        <Route
+          path={RouterPaths.clusters.queryPerformance.relativePath}
+          handle={{
+            breadcrumb: { label: 'queryPerformance', ns: 'clusters' },
+          }}
+          element={<ClusterQueryPerformance />}
+        />
+        <Route
+          path={RouterPaths.clusters.access.relativePath}
+          handle={{
+            breadcrumb: { label: 'connectionAccess', ns: 'clusters' },
+          }}
+          element={<ClusterAccess />}
+        />
+      </Route>
     </Route>
   </Route>
 );

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { CLUSTER_OVERVIEW_TABLE_COLUMN_NAMES } from '@widgets/cluster-overview-table/model/constants.ts';
+import { CLUSTER_OVERVIEW_TABLE_COLUMN_NAMES } from '@widgets/cluster-overview-table/model/constants.tsx';
 import { ClusterInfoInstance } from '@shared/api/api/clusters.ts';
 import { Box, Chip } from '@mui/material';
 
@@ -20,7 +20,7 @@ export const useGetOverviewClusterTableData = (data: ClusterInfoInstance[]) => {
             ))}
           </Box>
         ),
-        [CLUSTER_OVERVIEW_TABLE_COLUMN_NAMES.PENDING_RESTART]: String(item?.pending_restart),
+        [CLUSTER_OVERVIEW_TABLE_COLUMN_NAMES.PENDING_RESTART]: Boolean(item?.pending_restart),
         [CLUSTER_OVERVIEW_TABLE_COLUMN_NAMES.ID]: item?.id,
       })) ?? [],
     [data],

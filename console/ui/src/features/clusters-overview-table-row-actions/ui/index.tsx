@@ -6,7 +6,7 @@ import { TableRowActionsProps } from '@shared/model/types.ts';
 import { toast } from 'react-toastify';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useDeleteServersByIdMutation } from '@shared/api/api/other.ts';
-import { CLUSTER_OVERVIEW_TABLE_COLUMN_NAMES } from '@widgets/cluster-overview-table/model/constants.ts';
+import { CLUSTER_OVERVIEW_TABLE_COLUMN_NAMES } from '@widgets/cluster-overview-table/model/constants.tsx';
 import { useLazyGetClustersByIdQuery } from '@shared/api/api/clusters.ts';
 import { useParams } from 'react-router-dom';
 

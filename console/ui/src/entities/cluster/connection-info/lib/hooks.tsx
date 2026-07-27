@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Stack, Typography } from '@mui/material';
+import { IconButton, Stack, Typography } from '@mui/material';
 import EyeIcon from '@mui/icons-material/VisibilityOutlined';
 
 import CopyIcon from '@shared/ui/copy-icon';
@@ -71,7 +71,12 @@ export const useGetConnectionInfoConfig = ({
               : connectionInfo?.password || 'N/A'}
           </Typography>
           <Stack direction="row" alignItems="center" gap={1}>
-            <EyeIcon onClick={togglePasswordVisibility} sx={{ cursor: 'pointer', fontSize: iconFontSize }} />
+            <IconButton
+              size="small"
+              aria-label={t(isPasswordHidden ? 'showPassword' : 'hidePassword', { ns: 'shared' })}
+              onClick={togglePasswordVisibility}>
+              <EyeIcon sx={{ fontSize: iconFontSize }} />
+            </IconButton>
             <CopyIcon valueToCopy={connectionInfo?.password || 'N/A'} sx={{ fontSize: iconFontSize }} />
           </Stack>
         </ConnectionInfoRowContainer>

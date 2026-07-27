@@ -247,11 +247,9 @@ const QueryPerformance: FC<QueryPerformanceProps> = ({ clusterId }) => {
 
   if (overview.isError) {
     return (
-      <Paper sx={{ p: 2 }}>
-        <Alert severity="error" action={<Button onClick={refresh}>{t('retry')}</Button>}>
-          {t('queryPerformanceLoadError')}
-        </Alert>
-      </Paper>
+      <Alert severity="error" action={<Button onClick={refresh}>{t('retry')}</Button>}>
+        {t('queryPerformanceLoadError')}
+      </Alert>
     );
   }
 
@@ -263,7 +261,7 @@ const QueryPerformance: FC<QueryPerformanceProps> = ({ clusterId }) => {
   const canDisable = ['enabled', 'collecting', 'degraded'].includes(data?.status?.state ?? '');
 
   return (
-    <Paper sx={{ p: 2 }}>
+    <Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1} mb={2}>
         <Box>
           <Typography variant="h6">{t('queryPerformance')}</Typography>
@@ -499,7 +497,7 @@ const QueryPerformance: FC<QueryPerformanceProps> = ({ clusterId }) => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Paper>
+    </Box>
   );
 };
 

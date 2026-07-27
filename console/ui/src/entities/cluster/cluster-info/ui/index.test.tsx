@@ -28,7 +28,7 @@ describe('cluster management credential', () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
-        <ClusterInfo clusterId={5} clusterName="production" />
+        <ClusterInfo clusterId={5} />
       </MemoryRouter>,
     );
 

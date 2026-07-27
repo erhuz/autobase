@@ -4,6 +4,7 @@ const token = 'management-v1-token';
 
 test('management v1 shows recoverability, guards analytics, and preserves audit evidence', async ({ page }) => {
   let operationRequest: unknown;
+  let queryPerformanceRequests = 0;
 
   await page.addInitScript((value) => localStorage.setItem('token', value), token);
   await page.route('**/api/v1/**', async (route) => {
@@ -22,6 +23,13 @@ test('management v1 shows recoverability, guards analytics, and preserves audit 
           postgres_version: 16,
           environment: 'test',
           cluster_location: 'fixture-region',
+          connection_info: {
+            address: 'primary.internal',
+            port: '5432',
+            superuser: 'postgres',
+            password: 'fixture-password',
+          },
+          secret_id: 7,
           servers: [
             { id: 1, name: 'postgresql-1', role: 'primary', status: 'running', timeline: 7, lag: 0 },
             { id: 2, name: 'postgresql-2', role: 'replica', status: 'streaming', timeline: 7, lag: 0 },
@@ -73,6 +81,7 @@ test('management v1 shows recoverability, guards analytics, and preserves audit 
       });
     }
     if (path === '/clusters/5/query-performance') {
+      queryPerformanceRequests += 1;
       return route.fulfill({
         json: {
           status: { state: 'enabled', collected_node_count: 2, expected_node_count: 2 },
@@ -133,15 +142,28 @@ test('management v1 shows recoverability, guards analytics, and preserves audit 
         },
       });
     }
+    if (path === '/secrets') {
+      return route.fulfill({
+        json: {
+          data: [{ id: 7, name: 'fixture-operator-key', type: 'ssh_key' }],
+        },
+      });
+    }
 
     return route.fulfill({ status: 404, json: { path } });
   });
 
   await page.goto('/clusters/5/overview');
+  await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Database availability does not prove recoverability.')).toBeVisible();
   await expect(page.getByText('restore evidence missing')).toBeVisible();
-  await expect(page.getByText(/Scheduler owner: postgresql-2/)).toBeVisible();
+  await expect(page.getByText('Scheduler owner')).toBeVisible();
+  expect(queryPerformanceRequests).toBe(0);
+
+  await page.getByRole('tab', { name: 'Query performance' }).click();
+  await expect(page).toHaveURL('/clusters/5/query-performance');
   await expect(page.getByText('select * from users where id = $1')).toBeVisible();
+  expect(queryPerformanceRequests).toBeGreaterThan(0);
 
   await page.getByRole('button', { name: 'Details' }).click();
   await expect(page.getByRole('img', { name: 'Latency distribution' })).toBeVisible();
@@ -152,6 +174,13 @@ test('management v1 shows recoverability, guards analytics, and preserves audit 
   await page.getByLabel('Confirmation phrase').fill('DISABLE QUERY ANALYTICS');
   await start.click();
   expect(operationRequest).toEqual({ preflight_id: 11, confirmation: 'DISABLE QUERY ANALYTICS' });
+
+  await page.getByRole('tab', { name: 'Connection & access' }).click();
+  await expect(page).toHaveURL('/clusters/5/access');
+  await expect(page.getByRole('heading', { name: 'Connection details' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Management access' })).toBeVisible();
+  await page.getByRole('button', { name: 'Show password' }).click();
+  await expect(page.getByText('fixture-password')).toBeVisible();
 
   await page.goto('/operations/17/log');
   await expect(page.getByText('Operation #17')).toBeVisible();

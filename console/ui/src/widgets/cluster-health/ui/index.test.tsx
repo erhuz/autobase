@@ -53,13 +53,16 @@ describe('cluster health UI', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('postgresql-1')).toBeInTheDocument();
-    expect(screen.getByText(/Members: dcs-1, dcs-2/)).toBeInTheDocument();
+    expect(screen.getByText(/postgresql-1 · leader · running/)).toBeInTheDocument();
+    expect(screen.getByText('Members')).toBeInTheDocument();
+    expect(screen.getByText('dcs-1, dcs-2')).toBeInTheDocument();
     expect(screen.getAllByText('not observed').length).toBeGreaterThan(0);
     expect(screen.getByText('backup not observed')).toBeInTheDocument();
-    expect(screen.getByText(/Retention:.*"full":2/)).toBeInTheDocument();
-    expect(screen.getByText('Freshness policy: 24h')).toBeInTheDocument();
+    expect(screen.getByText('Retention')).toBeInTheDocument();
+    expect(screen.getByText('{"full":2}')).toBeInTheDocument();
+    expect(screen.getByText('Freshness policy')).toBeInTheDocument();
+    expect(screen.getByText('24h')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /#9/ })).toHaveAttribute('href', '/operations/9/log');
-    expect(screen.getByText('Run a fresh preflight.')).toBeInTheDocument();
+    expect(screen.getAllByText('Run a fresh preflight.').length).toBeGreaterThan(0);
   });
 });

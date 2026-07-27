@@ -5,7 +5,7 @@ import { ClusterOverviewTableProps } from '@widgets/cluster-overview-table/model
 import {
   CLUSTER_OVERVIEW_TABLE_COLUMN_NAMES,
   clusterOverviewTableColumns,
-} from '@widgets/cluster-overview-table/model/constants.ts';
+} from '@widgets/cluster-overview-table/model/constants.tsx';
 import ClustersOverviewTableButtons from '@widgets/cluster-overview-table/ui/ClustersOverviewTableButtons.tsx';
 import { useGetOverviewClusterTableData } from '@widgets/cluster-overview-table/lib/hooks.tsx';
 import { ClusterInfo } from '@shared/api/api/clusters.ts';
@@ -14,10 +14,10 @@ import { Stack, Typography } from '@mui/material';
 import ClustersOverviewTableRowActions from '@features/clusters-overview-table-row-actions';
 import RowActionsMenu from '@features/row-actions-menu/ui';
 
-const ClusterOverviewTable: FC<ClusterOverviewTableProps> = ({ clusterName = '', items, isLoading }) => {
-  const { t, i18n } = useTranslation('clusters');
+const ClusterOverviewTable: FC<ClusterOverviewTableProps> = ({ items, isLoading }) => {
+  const { t } = useTranslation('clusters');
 
-  const columns = useMemo<MRT_ColumnDef<ClusterInfo>[]>(() => clusterOverviewTableColumns(t), [i18n.language]);
+  const columns = useMemo<MRT_ColumnDef<ClusterInfo>[]>(() => clusterOverviewTableColumns(t), [t]);
 
   const data = useGetOverviewClusterTableData(items);
 
@@ -32,7 +32,6 @@ const ClusterOverviewTable: FC<ClusterOverviewTableProps> = ({ clusterName = '',
     },
     initialState: {
       columnVisibility: {
-        [CLUSTER_OVERVIEW_TABLE_COLUMN_NAMES.PENDING_RESTART]: false,
         [CLUSTER_OVERVIEW_TABLE_COLUMN_NAMES.TAGS]: false,
       },
     },
@@ -42,9 +41,7 @@ const ClusterOverviewTable: FC<ClusterOverviewTableProps> = ({ clusterName = '',
   return (
     <>
       <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Typography fontWeight="bold">
-          {t('cluster')}: {clusterName}
-        </Typography>
+        <Typography variant="h6">{t('nodes')}</Typography>
         <ClustersOverviewTableButtons />
       </Stack>
       <DefaultTable tableConfig={tableConfig} />
