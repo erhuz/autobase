@@ -143,6 +143,7 @@ T27|x|add imported-cluster credential attach + shared management blocker|V3,V4,V
 T28|x|cut reproducible `2.9.0-management.1` release manifest + official DB retention|V11,V12,V14,V15,V46,V47,V52,V55,I.image,I.release,I.release.manifest,I.verify
 T29|x|redesign cluster detail into triage-first tabs + route-scoped data|V11,V16,V17,V26,V43,V48,V56,V57,I.ui.health,I.ui.query,I.ui.access,I.api.health,I.api.query,I.api.credential,I.verify
 T30|x|cut reproducible `2.9.0-management.2` release + direct `2.9.0` upgrade gate|V11,V12,V14,V15,V46,V47,V52,V55,I.image,I.release,I.release.manifest,I.verify
+T31|x|cut `2.9.0-management.3` PGSM imported-cluster hotfix release|V11,V12,V14,V15,V46,V47,V52,V55,V58,I.image,I.release,I.release.manifest,I.verify
 
 ## §B
 
