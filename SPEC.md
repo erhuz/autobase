@@ -141,6 +141,7 @@ T26|x|repair stock `2.9.0` TimescaleDB migration + legacy operation compatibilit
 T27|x|add imported-cluster credential attach + shared management blocker|V3,V4,V9,V18,V22,V32,V44,V54,I.api.credential,I.api.preflight,I.api.run
 T28|x|cut reproducible `2.9.0-management.1` release manifest + official DB retention|V11,V12,V14,V15,V46,V47,V52,V55,I.image,I.release,I.release.manifest,I.verify
 T29|x|redesign cluster detail into triage-first tabs + route-scoped data|V11,V16,V17,V26,V43,V48,V56,V57,I.ui.health,I.ui.query,I.ui.access,I.api.health,I.api.query,I.api.credential,I.verify
+T30|~|cut reproducible `2.9.0-management.2` release + direct `2.9.0` upgrade gate|V11,V12,V14,V15,V46,V47,V52,V55,I.image,I.release,I.release.manifest,I.verify
 
 ## §B
 
