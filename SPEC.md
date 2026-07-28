@@ -161,7 +161,7 @@ T33|x|cut reproducible `2.9.0-management.4` credential-safety release|V11,V12,V1
 T34|x|use Docker-assigned Automation names; make DB/Docker logging panic-safe; verify concurrent launch + terminal observer cleanup|V11,V44,V47,V61,V64,I.automation,I.verify
 T35|x|derive DCS reachability from existing Patroni watcher evidence + health/UI contract|V16,V23,V32,V60,I.api.health,I.authority,I.verify
 T36|x|add guarded pgBackRest scheduler reconcile via existing role + duplicate-owner contract|V4,V17,V21,V22,V26,V27,V32,V54,V62,I.api.preflight,I.api.run,I.op.v1,I.authority,I.automation,I.verify
-T37|.|bind restore evidence to verified isolated restore/PITR completion|V17,V26,V30,V32,V63,I.api.health,I.authority,I.automation,I.verify
+T37|x|bind restore evidence to verified isolated restore/PITR completion|V17,V26,V30,V32,V63,I.api.health,I.authority,I.automation,I.verify
 
 ## §B
 
@@ -252,3 +252,4 @@ B83|2026-07-28|DCS card used configured inventory only; healthy live etcd remain
 B84|2026-07-28|finite app-generated Docker names collided; backup observer stopped before evidence upsert|V61
 B85|2026-07-28|pgBackRest scheduler cron remained on every member; concurrent jobs raced repository locks|V62
 B86|2026-07-28|typed-nil backup timestamps panicked SQL trace; CID-less deferred Docker cleanup panicked before DELETE → exited containers accumulated|V61,V64
+B87|2026-07-28|Automation gate used forbidden destructive temp cleanup; syntax checks never started|V45

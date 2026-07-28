@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"postgresql-cluster-console/internal/configuration"
@@ -143,6 +144,7 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 
 	var status string
 	var backupEvidence *storage.BackupEvidence
+	var restoreEvidence *storage.RestoreEvidence
 	for _, logEntity := range logs {
 		switch logEntity.Task {
 		case LogFieldSystemInfo:
@@ -180,6 +182,11 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 			if err != nil {
 				log.Error().Err(err).Msg("failed to decode backup evidence")
 			}
+		case LogFieldRestoreEvidence:
+			restoreEvidence, err = storage.DecodeRestoreEvidence(fmt.Sprint(logEntity.Msg))
+			if err != nil {
+				log.Error().Err(err).Msg("failed to decode restore evidence")
+			}
 		}
 		if logEntity.Summary != nil {
 			status = logEntity.Status
@@ -203,6 +210,14 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 			status = storage.OperationStatusFailed
 		}
 	}
+	var recoverySourceID int64
+	if isRecoveryOperation(op.Type) && status == storage.OperationStatusSucceeded {
+		recoverySourceID, err = bindRestoreEvidence(op, clusterInfo, restoreEvidence)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to bind restore evidence")
+			status = storage.OperationStatusFailed
+		}
+	}
 	verificationValues := map[string]any{"automation_summary": true, "verified": status == storage.OperationStatusSucceeded}
 	if backupEvidence != nil {
 		verificationValues["repository_reachable"] = backupEvidence.RepositoryReachable
@@ -211,15 +226,35 @@ func (lw *logWatcher) collectContainerLog(ctx context.Context, op *storage.Opera
 		verificationValues["wal_continuous"] = backupEvidence.WalContinuous
 		verificationValues["scheduler_owners"] = json.RawMessage(backupEvidence.SchedulerOwners)
 	}
+	if recoverySourceID != 0 {
+		verificationValues["restore_tested_at"] = restoreEvidence.VerifiedAt
+	}
 	verification, _ := json.Marshal(verificationValues)
 	var next *string
 	if status == storage.OperationStatusFailed {
 		value := "Review the operation log, restore node health if needed, then run a fresh preflight."
 		next = &value
 	}
-	updatedOperation, err := lw.db.UpdateOperation(ctx, &storage.UpdateOperationReq{
-		ID: op.ID, Status: &status, FinalVerification: verification, SafeNextAction: next,
-	})
+	var updatedOperation *storage.Operation
+	if recoverySourceID != 0 {
+		updatedOperation, err = lw.db.CompleteRecoveryOperation(
+			ctx, op.ID, recoverySourceID, restoreEvidence.VerifiedAt, verification,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to complete recovery operation")
+			status = storage.OperationStatusFailed
+			delete(verificationValues, "restore_tested_at")
+			verificationValues["verified"] = false
+			verification, _ = json.Marshal(verificationValues)
+			value := "Review the operation log, restore node health if needed, then run a fresh preflight."
+			next = &value
+		}
+	}
+	if updatedOperation == nil {
+		updatedOperation, err = lw.db.UpdateOperation(ctx, &storage.UpdateOperationReq{
+			ID: op.ID, Status: &status, FinalVerification: verification, SafeNextAction: next,
+		})
+	}
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update operation status in db")
 	} else {
@@ -292,4 +327,31 @@ func isBackupOperation(operationType string) bool {
 	return operationType == storage.OperationTypeBackupFull ||
 		operationType == storage.OperationTypeBackupDiff ||
 		operationType == storage.OperationTypeBackupSchedulerReconcile
+}
+
+func isRecoveryOperation(operationType string) bool {
+	return operationType == storage.OperationTypeRestore || operationType == storage.OperationTypePITR
+}
+
+func bindRestoreEvidence(op *storage.Operation, recoveryCluster *storage.Cluster, evidence *storage.RestoreEvidence) (int64, error) {
+	if evidence == nil {
+		return 0, errors.New("restore evidence marker not found")
+	}
+	var desired struct {
+		Action            string `json:"action"`
+		SourceCluster     string `json:"source_cluster"`
+		SourceClusterID   int64  `json:"source_cluster_id"`
+		RecoveryCluster   string `json:"recovery_cluster"`
+		RecoveryClusterID int64  `json:"recovery_cluster_id"`
+	}
+	if json.Unmarshal(op.SanitizedParams, &desired) != nil ||
+		desired.Action != op.Type || desired.Action != evidence.Operation ||
+		desired.SourceClusterID <= 0 || desired.SourceClusterID == op.ClusterID ||
+		desired.RecoveryClusterID != op.ClusterID || recoveryCluster.ID != op.ClusterID ||
+		desired.SourceCluster != evidence.SourceCluster ||
+		desired.RecoveryCluster != recoveryCluster.Name ||
+		desired.RecoveryCluster != evidence.RecoveryCluster {
+		return 0, errors.New("restore evidence does not match reserved recovery state")
+	}
+	return desired.SourceClusterID, nil
 }

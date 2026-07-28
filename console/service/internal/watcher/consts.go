@@ -5,7 +5,8 @@ const (
 	ContainerStatusRemoving = "removing"
 	ContainerStatusDead     = "dead"
 
-	LogFieldSystemInfo     = "System info"
-	LogFieldConnectionInfo = "vitabaks.autobase.deploy_finish : Connection info"
-	LogFieldBackupEvidence = "Emit sanitized pgBackRest evidence"
+	LogFieldSystemInfo      = "System info"
+	LogFieldConnectionInfo  = "vitabaks.autobase.deploy_finish : Connection info"
+	LogFieldBackupEvidence  = "Emit sanitized pgBackRest evidence"
+	LogFieldRestoreEvidence = "Emit verified isolated recovery evidence"
 )

@@ -22,6 +22,8 @@
           - fixed_backup_argv in playbook
           - final_check in playbook
           - evidence_marker in playbook
+          - restore_timestamp_input not in defaults
+          - restore_timestamp_input not in playbook
           - arbitrary_shell not in playbook
       vars:
         defaults: "{{ lookup('ansible.builtin.file', playbook_dir + '/../roles/common/defaults/main.yml') }}"
@@ -43,4 +45,5 @@
         fixed_backup_argv: "--type={{ '{{' }} backup_operation_type {{ '}}' }}"
         final_check: Verify repository and WAL after backup
         evidence_marker: AUTOBASE_BACKUP_EVIDENCE=
+        restore_timestamp_input: pgbackrest_restore_tested_at
         arbitrary_shell: ansible.builtin.shell

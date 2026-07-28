@@ -16,7 +16,6 @@
           - backup_operation_type | default('observe') in ['observe', 'full', 'diff', 'reconcile']
           - pgbackrest_scheduler_host in (groups.get('postgres_cluster', []) + groups.get('pgbackrest', []))
           - pgbackrest_freshness_seconds | int > 0
-          - pgbackrest_restore_tested_at is none or pgbackrest_restore_tested_at is match('^[0-9]{4}-[0-9]{2}-[0-9]{2}T')
       run_once: true
 
     - name: Inspect pgBackRest scheduler files
@@ -204,7 +203,6 @@
           locks: "{{ pgbackrest_lock_files }}"
           scheduler_owners: "{{ hostvars['localhost'].pgbackrest_scheduler_owners }}"
           freshness_seconds: "{{ pgbackrest_freshness_seconds | int }}"
-          restore_tested_at: "{{ pgbackrest_restore_tested_at | default(none, true) }}"
 
     - name: Emit sanitized pgBackRest evidence
       ansible.builtin.debug:

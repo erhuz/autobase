@@ -23,7 +23,6 @@ Installs and configures [pgBackRest](https://github.com/pgbackrest/pgbackrest) f
 | `pgbackrest_cron_jobs` | [...] | Cron jobs for backups (full/diff). Created on DB host by default, or on repo_host if defined. |
 | `pgbackrest_scheduler_host` | first DB/repository host | Sole owner of scheduled and manual backup initiation. |
 | `pgbackrest_freshness_seconds` | 86400 | Maximum accepted age of the latest backup. |
-| `pgbackrest_restore_tested_at` | null | RFC3339 timestamp of the latest externally verified restore test. |
 
 Note: To bootstrap via backup set `patroni_cluster_bootstrap_method: "pgbackrest"`.
 

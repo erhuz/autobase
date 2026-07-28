@@ -9,7 +9,10 @@ import (
 	"unicode"
 )
 
-const BackupEvidenceMarker = "AUTOBASE_BACKUP_EVIDENCE="
+const (
+	BackupEvidenceMarker  = "AUTOBASE_BACKUP_EVIDENCE="
+	RestoreEvidenceMarker = "AUTOBASE_RESTORE_EVIDENCE="
+)
 
 type backupEvidencePayload struct {
 	ObservedAt          time.Time      `json:"observed_at"`
@@ -21,26 +24,18 @@ type backupEvidencePayload struct {
 	Locks               []string       `json:"locks"`
 	SchedulerOwners     []string       `json:"scheduler_owners"`
 	FreshnessSeconds    int64          `json:"freshness_seconds"`
-	RestoreTestedAt     *time.Time     `json:"restore_tested_at"`
+}
+
+type RestoreEvidence struct {
+	VerifiedAt      time.Time `json:"verified_at"`
+	SourceCluster   string    `json:"source_cluster"`
+	RecoveryCluster string    `json:"recovery_cluster"`
+	Operation       string    `json:"operation"`
 }
 
 func DecodeBackupEvidence(message string, clusterID int64) (*BackupEvidence, error) {
-	start := strings.Index(message, BackupEvidenceMarker)
-	if start < 0 {
-		return nil, errors.New("backup evidence marker not found")
-	}
-	encoded := message[start+len(BackupEvidenceMarker):]
-	if end := strings.IndexFunc(encoded, func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '+' && r != '/' && r != '='
-	}); end >= 0 {
-		encoded = encoded[:end]
-	}
-	raw, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		return nil, err
-	}
 	var payload backupEvidencePayload
-	if err = json.Unmarshal(raw, &payload); err != nil {
+	if err := decodeEvidence(message, BackupEvidenceMarker, &payload); err != nil {
 		return nil, err
 	}
 	if payload.ObservedAt.IsZero() || payload.FreshnessSeconds <= 0 {
@@ -64,6 +59,36 @@ func DecodeBackupEvidence(message string, clusterID int64) (*BackupEvidence, err
 		LatestFull:          payload.LatestFull, LatestDifferential: payload.LatestDifferential,
 		Retention: retention, WalContinuous: payload.WalContinuous,
 		Locks: locks, SchedulerOwners: owners, FreshnessSeconds: payload.FreshnessSeconds,
-		RestoreTestedAt: payload.RestoreTestedAt,
 	}, nil
+}
+
+func DecodeRestoreEvidence(message string) (*RestoreEvidence, error) {
+	var evidence RestoreEvidence
+	if err := decodeEvidence(message, RestoreEvidenceMarker, &evidence); err != nil {
+		return nil, err
+	}
+	if evidence.VerifiedAt.IsZero() || evidence.SourceCluster == "" || evidence.RecoveryCluster == "" ||
+		evidence.SourceCluster == evidence.RecoveryCluster ||
+		(evidence.Operation != OperationTypeRestore && evidence.Operation != OperationTypePITR) {
+		return nil, errors.New("restore evidence is incomplete")
+	}
+	return &evidence, nil
+}
+
+func decodeEvidence(message, marker string, destination any) error {
+	start := strings.Index(message, marker)
+	if start < 0 {
+		return errors.New("evidence marker not found")
+	}
+	encoded := message[start+len(marker):]
+	if end := strings.IndexFunc(encoded, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '+' && r != '/' && r != '='
+	}); end >= 0 {
+		encoded = encoded[:end]
+	}
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, destination)
 }

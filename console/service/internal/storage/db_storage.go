@@ -902,8 +902,8 @@ func (s *dbStorage) UpsertBackupEvidence(ctx context.Context, evidence *BackupEv
 	_, err := s.db.Exec(ctx, `
 		insert into cluster_backup_evidence (
 			cluster_id, observed_at, repository_reachable, latest_full, latest_differential,
-			retention, wal_continuous, locks, scheduler_owners, freshness_seconds, restore_tested_at
-		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			retention, wal_continuous, locks, scheduler_owners, freshness_seconds
+		) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		on conflict (cluster_id) do update set
 			observed_at = excluded.observed_at,
 			repository_reachable = excluded.repository_reachable,
@@ -914,12 +914,11 @@ func (s *dbStorage) UpsertBackupEvidence(ctx context.Context, evidence *BackupEv
 			locks = excluded.locks,
 			scheduler_owners = excluded.scheduler_owners,
 			freshness_seconds = excluded.freshness_seconds,
-			restore_tested_at = excluded.restore_tested_at,
 			updated_at = current_timestamp`,
 		evidence.ClusterID, evidence.ObservedAt, evidence.RepositoryReachable,
 		evidence.LatestFull, evidence.LatestDifferential, evidence.Retention,
 		evidence.WalContinuous, evidence.Locks, evidence.SchedulerOwners,
-		evidence.FreshnessSeconds, evidence.RestoreTestedAt,
+		evidence.FreshnessSeconds,
 	)
 	return err
 }
@@ -934,6 +933,51 @@ func (s *dbStorage) GetBackupEvidence(ctx context.Context, clusterID int64) (*Ba
 		return nil, nil
 	}
 	return evidence, err
+}
+
+func (s *dbStorage) CompleteRecoveryOperation(
+	ctx context.Context,
+	operationID, sourceClusterID int64,
+	verifiedAt time.Time,
+	finalVerification []byte,
+) (*Operation, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	result, err := tx.Exec(ctx, `update cluster_backup_evidence
+		set restore_tested_at = greatest(coalesce(restore_tested_at, $2), $2),
+		    updated_at = current_timestamp
+		where cluster_id = $1`, sourceClusterID, verifiedAt)
+	if err != nil {
+		return nil, err
+	}
+	if rows := result.RowsAffected(); rows != 1 {
+		return nil, errors.New("source backup evidence not found")
+	}
+	rows, err := tx.Query(ctx, `update operations
+		set operation_status = $1, final_verification = $2
+		where id = $3
+		  and cluster_id <> $4
+		  and operation_type in ($5,$6)
+		  and operation_status in ($7,$8,$9)
+		returning *`,
+		OperationStatusSucceeded, redact.JSON(finalVerification), operationID, sourceClusterID,
+		OperationTypeRestore, OperationTypePITR,
+		OperationStatusQueued, OperationStatusRunning, legacyOperationInProgress)
+	if err != nil {
+		return nil, err
+	}
+	operation, err := pgx.CollectOneRow(rows, pgx.RowToStructByPos[Operation])
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	operation.Status = canonicalOperationStatus(operation.Status)
+	return &operation, nil
 }
 
 func (s *dbStorage) CreateServer(ctx context.Context, req *CreateServerReq) (*Server, error) {

@@ -20,6 +20,11 @@
           - dcs_verification in playbook
           - recovery_verification in playbook
           - backup_verification in playbook
+          - final_authority in playbook
+          - completion_time in playbook
+          - restore_evidence_marker in playbook
+          - playbook.index(final_authority) < playbook.index(completion_time)
+          - playbook.index(completion_time) < playbook.index(restore_evidence_marker)
           - arbitrary_shell not in playbook
       vars:
         playbook: "{{ lookup('ansible.builtin.file', playbook_dir + '/../playbooks/restore_pgcluster.yml') }}"
@@ -36,4 +41,7 @@
         dcs_verification: Read recovered Patroni DCS membership
         recovery_verification: Verify recovered PostgreSQL left recovery
         backup_verification: Verify source pgBackRest repository
+        final_authority: Require recovered target authority checks
+        completion_time: Read verified isolated recovery completion time
+        restore_evidence_marker: AUTOBASE_RESTORE_EVIDENCE=
         arbitrary_shell: ansible.builtin.shell

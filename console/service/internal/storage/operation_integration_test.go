@@ -40,17 +40,87 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 
 	walContinuous := true
 	observedAt := time.Now().UTC().Truncate(time.Second)
+	untrustedRestore := observedAt.Add(-time.Minute)
 	if err = store.UpsertBackupEvidence(ctx, &BackupEvidence{
 		ClusterID: cluster.ID, ObservedAt: observedAt, RepositoryReachable: true,
 		LatestFull: &observedAt, Retention: []byte(`{"full":7}`), WalContinuous: &walContinuous,
 		Locks: []byte(`[]`), SchedulerOwners: []byte(`["postgresql-1"]`), FreshnessSeconds: 86400,
+		RestoreTestedAt: &untrustedRestore,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	backupEvidence, err := store.GetBackupEvidence(ctx, cluster.ID)
 	if err != nil || backupEvidence == nil || !backupEvidence.RepositoryReachable ||
-		backupEvidence.LatestFull == nil || string(backupEvidence.SchedulerOwners) != `["postgresql-1"]` {
+		backupEvidence.LatestFull == nil || string(backupEvidence.SchedulerOwners) != `["postgresql-1"]` ||
+		backupEvidence.RestoreTestedAt != nil {
 		t.Fatalf("backup evidence = %+v, %v", backupEvidence, err)
+	}
+
+	recoveryCluster, err := store.CreateCluster(ctx, &CreateClusterReq{
+		ProjectID: projectID, EnvironmentID: environmentID,
+		Name: fmt.Sprintf("recovery-test-%d", time.Now().UnixNano()), PostgreSqlVersion: 16,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.DeleteCluster(context.Background(), recoveryCluster.ID) }()
+	recoveryOperation, err := store.ReserveOperation(ctx, &CreateOperationReq{
+		ProjectID: projectID, ClusterID: recoveryCluster.ID, Type: OperationTypeRestore,
+		Cid: uuid.NewString(), SanitizedParams: []byte(`{"source_cluster":"source","recovery_cluster":"recovery"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	running := OperationStatusRunning
+	code := "recovery-container"
+	if _, err = store.UpdateOperation(ctx, &UpdateOperationReq{
+		ID: recoveryOperation.ID, Status: &running, DockerCode: &code,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	restoreVerifiedAt := observedAt.Add(time.Minute)
+	completed, err := store.CompleteRecoveryOperation(
+		ctx, recoveryOperation.ID, cluster.ID, restoreVerifiedAt,
+		[]byte(`{"automation_summary":true,"verified":true}`),
+	)
+	if err != nil || completed.Status != OperationStatusSucceeded {
+		t.Fatalf("completed recovery = %+v, %v", completed, err)
+	}
+	backupEvidence.ObservedAt = observedAt.Add(2 * time.Minute)
+	backupEvidence.RestoreTestedAt = &untrustedRestore
+	if err = store.UpsertBackupEvidence(ctx, backupEvidence); err != nil {
+		t.Fatal(err)
+	}
+	backupEvidence, err = store.GetBackupEvidence(ctx, cluster.ID)
+	if err != nil || backupEvidence.RestoreTestedAt == nil ||
+		!backupEvidence.RestoreTestedAt.Equal(restoreVerifiedAt) {
+		t.Fatalf("verified restore evidence = %+v, %v", backupEvidence, err)
+	}
+	invalidRecovery, err := store.ReserveOperation(ctx, &CreateOperationReq{
+		ProjectID: projectID, ClusterID: recoveryCluster.ID,
+		Type: OperationTypeBackupFull, Cid: uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.UpdateOperation(ctx, &UpdateOperationReq{
+		ID: invalidRecovery.ID, Status: &running, DockerCode: &code,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CompleteRecoveryOperation(
+		ctx, invalidRecovery.ID, cluster.ID, restoreVerifiedAt.Add(time.Minute), []byte(`{"verified":true}`),
+	); err == nil {
+		t.Fatal("non-recovery operation advanced restore evidence")
+	}
+	backupEvidence, err = store.GetBackupEvidence(ctx, cluster.ID)
+	if err != nil || backupEvidence.RestoreTestedAt == nil ||
+		!backupEvidence.RestoreTestedAt.Equal(restoreVerifiedAt) {
+		t.Fatalf("restore evidence changed after rolled-back completion = %+v, %v", backupEvidence, err)
+	}
+	cancelled := OperationStatusCancelled
+	if _, err = store.UpdateOperation(ctx, &UpdateOperationReq{ID: invalidRecovery.ID, Status: &cancelled}); err != nil {
+		t.Fatal(err)
 	}
 
 	preflightReq := &CreateOperationPreflightReq{
@@ -124,8 +194,7 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 		t.Fatalf("concurrent reservations: winner=%v failures=%d", first != nil, failures)
 	}
 
-	running := OperationStatusRunning
-	code := "container"
+	code = "container"
 	if _, err = store.UpdateOperation(ctx, &UpdateOperationReq{ID: first.ID, Status: &running, DockerCode: &code}); err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +275,6 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 	if !healthActive || !healthLatest {
 		t.Fatalf("health operations = %+v", healthOperations)
 	}
-	cancelled := OperationStatusCancelled
 	if _, err = store.UpdateOperation(ctx, &UpdateOperationReq{ID: second.ID, Status: &cancelled}); err != nil {
 		t.Fatal(err)
 	}

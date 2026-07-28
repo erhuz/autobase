@@ -69,6 +69,7 @@ type IStorage interface {
 	// backup evidence
 	UpsertBackupEvidence(ctx context.Context, evidence *BackupEvidence) error
 	GetBackupEvidence(ctx context.Context, clusterID int64) (*BackupEvidence, error)
+	CompleteRecoveryOperation(ctx context.Context, operationID, sourceClusterID int64, verifiedAt time.Time, finalVerification []byte) (*Operation, error)
 
 	// server
 	CreateServer(ctx context.Context, req *CreateServerReq) (*Server, error)
