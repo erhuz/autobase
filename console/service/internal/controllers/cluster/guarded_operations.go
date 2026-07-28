@@ -176,7 +176,7 @@ func (h *guardedOperationsHandler) HandleOperation(param clusterapi.PostClusters
 func supportedOperationType(operationType string) bool {
 	switch operationType {
 	case storage.OperationTypeSwitchover, storage.OperationTypeReload, storage.OperationTypeRollingRestart, storage.OperationTypeReplicaReinit,
-		storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff,
+		storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff, storage.OperationTypeBackupSchedulerReconcile,
 		storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable,
 		storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate,
 		storage.OperationTypeRollingUpdate, storage.OperationTypePostgreSQLUpgrade, storage.OperationTypeEmergencyFailover,
@@ -196,8 +196,8 @@ func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterIn
 		state, err = h.maintenancePreflightState(ctx, clusterInfo, operationType)
 	case storage.OperationTypeReplicaReinit:
 		state, err = h.replicaReinitPreflightState(ctx, clusterInfo, target)
-	case storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff:
-		state, err = h.backupPreflightState(ctx, clusterInfo, operationType)
+	case storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff, storage.OperationTypeBackupSchedulerReconcile:
+		state, err = h.backupPreflightState(ctx, clusterInfo, operationType, target, params)
 	case storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:
 		state, err = h.queryAnalyticsPreflightState(ctx, clusterInfo, operationType)
 	case storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate:
@@ -241,7 +241,7 @@ func (h *guardedOperationsHandler) operationInputs(ctx context.Context, clusterI
 	case storage.OperationTypeReplicaReinit:
 		playbook = replicaReinitPlaybook
 		envs, extraVars, err = h.replicaReinitOperationInputs(ctx, clusterInfo, desired)
-	case storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff:
+	case storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff, storage.OperationTypeBackupSchedulerReconcile:
 		playbook = backupPlaybook
 		envs, extraVars, err = h.backupOperationInputs(ctx, clusterInfo, operationType, desired)
 	case storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:

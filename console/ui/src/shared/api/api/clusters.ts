@@ -369,6 +369,7 @@ export type RequestOperationPreflight = {
     | 'replica_reinit'
     | 'backup_full'
     | 'backup_diff'
+    | 'backup_scheduler_reconcile'
     | 'query_analytics_enable'
     | 'query_analytics_disable'
     | 'node_add'

@@ -46,6 +46,8 @@ const (
 	ClusterStatusUnavailable = "unavailable"
 )
 
+const OperationTypeBackupSchedulerReconcile = "backup_scheduler_reconcile"
+
 func IsTerminalOperationStatus(status string) bool {
 	status = canonicalOperationStatus(status)
 	return status == OperationStatusSucceeded || status == OperationStatusFailed || status == OperationStatusCancelled

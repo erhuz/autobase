@@ -160,7 +160,7 @@ T32|x|bind 3 cluster automation password secrets + Access UI + purpose map + pre
 T33|x|cut reproducible `2.9.0-management.4` credential-safety release|V11,V12,V14,V15,V46,V47,V52,V55,V59,I.image,I.release,I.release.manifest,I.verify
 T34|x|use Docker-assigned Automation names; make DB/Docker logging panic-safe; verify concurrent launch + terminal observer cleanup|V11,V44,V47,V61,V64,I.automation,I.verify
 T35|x|derive DCS reachability from existing Patroni watcher evidence + health/UI contract|V16,V23,V32,V60,I.api.health,I.authority,I.verify
-T36|.|add guarded pgBackRest scheduler reconcile via existing role + duplicate-owner contract|V4,V17,V21,V22,V26,V27,V32,V54,V62,I.api.preflight,I.api.run,I.op.v1,I.authority,I.automation,I.verify
+T36|x|add guarded pgBackRest scheduler reconcile via existing role + duplicate-owner contract|V4,V17,V21,V22,V26,V27,V32,V54,V62,I.api.preflight,I.api.run,I.op.v1,I.authority,I.automation,I.verify
 T37|.|bind restore evidence to verified isolated restore/PITR completion|V17,V26,V30,V32,V63,I.api.health,I.authority,I.automation,I.verify
 
 ## §B

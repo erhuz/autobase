@@ -27,7 +27,7 @@ type RequestOperationPreflight struct {
 
 	// type
 	// Required: true
-	// Enum: ["switchover","reload","rolling_restart","replica_reinit","backup_full","backup_diff","query_analytics_enable","query_analytics_disable","node_add","node_remove","config_update","rolling_update","postgresql_upgrade","emergency_failover","restore","pitr","database_admin","extension_admin","pgbouncer_admin"]
+	// Enum: ["switchover","reload","rolling_restart","replica_reinit","backup_full","backup_diff","backup_scheduler_reconcile","query_analytics_enable","query_analytics_disable","node_add","node_remove","config_update","rolling_update","postgresql_upgrade","emergency_failover","restore","pitr","database_admin","extension_admin","pgbouncer_admin"]
 	Type *string `json:"type"`
 }
 
@@ -76,7 +76,7 @@ var requestOperationPreflightTypeTypePropEnum []any
 
 func init() {
 	var res []string
-	if err := json.Unmarshal([]byte(`["switchover","reload","rolling_restart","replica_reinit","backup_full","backup_diff","query_analytics_enable","query_analytics_disable","node_add","node_remove","config_update","rolling_update","postgresql_upgrade","emergency_failover","restore","pitr","database_admin","extension_admin","pgbouncer_admin"]`), &res); err != nil {
+	if err := json.Unmarshal([]byte(`["switchover","reload","rolling_restart","replica_reinit","backup_full","backup_diff","backup_scheduler_reconcile","query_analytics_enable","query_analytics_disable","node_add","node_remove","config_update","rolling_update","postgresql_upgrade","emergency_failover","restore","pitr","database_admin","extension_admin","pgbouncer_admin"]`), &res); err != nil {
 		panic(err)
 	}
 	for _, v := range res {
@@ -103,6 +103,9 @@ const (
 
 	// RequestOperationPreflightTypeBackupDiff captures enum value "backup_diff"
 	RequestOperationPreflightTypeBackupDiff string = "backup_diff"
+
+	// RequestOperationPreflightTypeBackupSchedulerReconcile captures enum value "backup_scheduler_reconcile"
+	RequestOperationPreflightTypeBackupSchedulerReconcile string = "backup_scheduler_reconcile"
 
 	// RequestOperationPreflightTypeQueryAnalyticsEnable captures enum value "query_analytics_enable"
 	RequestOperationPreflightTypeQueryAnalyticsEnable string = "query_analytics_enable"

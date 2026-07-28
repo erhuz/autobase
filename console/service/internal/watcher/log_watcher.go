@@ -289,5 +289,7 @@ func isQueryAnalyticsOperation(operationType string) bool {
 }
 
 func isBackupOperation(operationType string) bool {
-	return operationType == storage.OperationTypeBackupFull || operationType == storage.OperationTypeBackupDiff
+	return operationType == storage.OperationTypeBackupFull ||
+		operationType == storage.OperationTypeBackupDiff ||
+		operationType == storage.OperationTypeBackupSchedulerReconcile
 }

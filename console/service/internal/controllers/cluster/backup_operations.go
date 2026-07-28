@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,7 +21,12 @@ type backupDesired struct {
 	SchedulerOwner string `json:"scheduler_owner"`
 }
 
-func (h *guardedOperationsHandler) backupPreflightState(ctx context.Context, clusterInfo *storage.Cluster, operationType string) (*guardedPreflight, error) {
+func (h *guardedOperationsHandler) backupPreflightState(
+	ctx context.Context,
+	clusterInfo *storage.Cluster,
+	operationType, target string,
+	params []byte,
+) (*guardedPreflight, error) {
 	evidence, err := h.db.GetBackupEvidence(ctx, clusterInfo.ID)
 	if err != nil {
 		return nil, err
@@ -43,13 +50,29 @@ func (h *guardedOperationsHandler) backupPreflightState(ctx context.Context, clu
 	if len(owners) == 1 {
 		owner = owners[0]
 	}
+	affectedNodes := []string{owner}
+	reconcile := operationType == storage.OperationTypeBackupSchedulerReconcile
+	configuredOwner, schedulerNodes, configuredOwnerOK := configuredBackupScheduler(clusterInfo.ExtraVars, clusterInfo.Inventory)
+	if reconcile {
+		owner = configuredOwner
+		affectedNodes = schedulerNodes
+	}
 	checks := []preflightCheck{
 		{Name: "pgBackRest configured", OK: enabled},
 		{Name: "backup evidence fresh", OK: evidenceFresh},
 		{Name: "repository reachable", OK: evidence != nil && evidence.RepositoryReachable},
-		{Name: "exactly one scheduler owner", OK: len(owners) == 1},
 		{Name: "repository has no active lock", OK: len(locks) == 0},
 		{Name: "no active cluster mutation", OK: !active},
+		{Name: "target omitted", OK: target == ""},
+		{Name: "operation parameters omitted", OK: len(params) == 0},
+	}
+	if reconcile {
+		checks = append(checks,
+			preflightCheck{Name: "configured scheduler owner resolved", OK: configuredOwnerOK},
+			preflightCheck{Name: "scheduler ownership drift observed", OK: configuredOwnerOK && (len(owners) != 1 || owners[0] != configuredOwner)},
+		)
+	} else {
+		checks = append(checks, preflightCheck{Name: "exactly one scheduler owner", OK: len(owners) == 1})
 	}
 	if operationType == storage.OperationTypeBackupDiff {
 		checks = append(checks, preflightCheck{Name: "full backup exists", OK: evidence != nil && evidence.LatestFull != nil})
@@ -62,7 +85,7 @@ func (h *guardedOperationsHandler) backupPreflightState(ctx context.Context, clu
 	}
 	observed := map[string]any{
 		"observed_at": nil, "repository_reachable": false,
-		"locks": locks, "scheduler_owners": owners,
+		"locks": locks, "scheduler_owners": owners, "configured_scheduler_owner": configuredOwner,
 	}
 	if evidence != nil {
 		observed["observed_at"] = evidence.ObservedAt
@@ -71,25 +94,33 @@ func (h *guardedOperationsHandler) backupPreflightState(ctx context.Context, clu
 		observed["latest_differential"] = evidence.LatestDifferential
 	}
 	hash := sha256.Sum256(mustJSON(observed))
-	backupType := strings.TrimPrefix(operationType, "backup_")
+	backupType := backupOperationType(operationType)
+	plan := []string{
+		"recheck one scheduler owner and no pgBackRest lock",
+		"run " + backupType + " backup on " + owner,
+		"verify pgBackRest repository, WAL, and completed backup inventory",
+	}
+	confirmation := "BACKUP " + strings.ToUpper(backupType) + " " + clusterInfo.Name
+	if reconcile {
+		plan = []string{
+			"recheck scheduler ownership drift and no pgBackRest lock",
+			"remove pgBackRest cron from non-owner nodes",
+			"apply pgBackRest cron on " + owner + " and verify sole ownership",
+		}
+		confirmation = "RECONCILE BACKUP SCHEDULER " + clusterInfo.Name
+	}
 	return &guardedPreflight{
 		observed: observed,
 		desired:  backupDesired{Type: backupType, SchedulerOwner: owner},
 		checks:   checks, blockers: blockers,
-		plan: []string{
-			"recheck one scheduler owner and no pgBackRest lock",
-			"run " + backupType + " backup on " + owner,
-			"verify pgBackRest repository, WAL, and completed backup inventory",
-		},
-		affectedNodes: []string{owner},
-		confirmation:  "BACKUP " + strings.ToUpper(backupType) + " " + clusterInfo.Name,
-		topologyHash:  hex.EncodeToString(hash[:]),
+		plan: plan, affectedNodes: affectedNodes, confirmation: confirmation,
+		topologyHash: hex.EncodeToString(hash[:]),
 	}, nil
 }
 
 func (h *guardedOperationsHandler) backupOperationInputs(ctx context.Context, clusterInfo *storage.Cluster, operationType string, desired []byte) ([]string, []byte, error) {
 	var state backupDesired
-	expected := strings.TrimPrefix(operationType, "backup_")
+	expected := backupOperationType(operationType)
 	if err := json.Unmarshal(desired, &state); err != nil || state.Type != expected || state.SchedulerOwner == "" {
 		return nil, nil, errors.New("backup desired state is invalid")
 	}
@@ -102,4 +133,50 @@ func (h *guardedOperationsHandler) backupOperationInputs(ctx context.Context, cl
 	extraVars["backup_operation_type"] = state.Type
 	payload, err := json.Marshal(extraVars)
 	return envs, payload, err
+}
+
+func backupOperationType(operationType string) string {
+	if operationType == storage.OperationTypeBackupSchedulerReconcile {
+		return "reconcile"
+	}
+	return strings.TrimPrefix(operationType, "backup_")
+}
+
+func configuredBackupScheduler(extraVars, rawInventory []byte) (string, []string, bool) {
+	inventory, inventoryOK := lifecycleInventory(rawInventory)
+	if !inventoryOK {
+		return "", nil, false
+	}
+	nodes := make([]string, 0, len(inventory))
+	for _, host := range inventory {
+		if slices.Contains(host.Groups, "master") || slices.Contains(host.Groups, "replica") ||
+			slices.Contains(host.Groups, "postgres_cluster") || slices.Contains(host.Groups, "pgbackrest") {
+			nodes = append(nodes, host.Name)
+		}
+	}
+	sort.Strings(nodes)
+
+	var values map[string]any
+	if json.Unmarshal(extraVars, &values) != nil {
+		return "", nodes, false
+	}
+	if configured, _ := values["pgbackrest_scheduler_host"].(string); configured != "" {
+		host, ok := lifecycleInventoryTarget(inventory, configured)
+		return host.Name, nodes, ok && host.Name != ""
+	}
+	group := "master"
+	if repoHost, _ := values["pgbackrest_repo_host"].(string); repoHost != "" {
+		group = "pgbackrest"
+	}
+	candidates := make([]string, 0)
+	for _, host := range inventory {
+		if slices.Contains(host.Groups, group) {
+			candidates = append(candidates, host.Name)
+		}
+	}
+	sort.Strings(candidates)
+	if len(candidates) == 0 {
+		return "", nodes, false
+	}
+	return candidates[0], nodes, true
 }

@@ -29,6 +29,7 @@ func (s *backupOperationStorage) GetBackupEvidence(context.Context, int64) (*sto
 func backupFixture() (*backupOperationStorage, *configuration.Config) {
 	store, _ := switchoverFixture()
 	store.cluster.ExtraVars = []byte(`{"pgbackrest_install":true}`)
+	store.cluster.Inventory = []byte(`{"all":{"children":{"master":{"hosts":{"postgresql-1":{}}},"replica":{"hosts":{"postgresql-2":{},"postgresql-3":{}}}}}}`)
 	now := time.Now().UTC()
 	storeWithBackup := &backupOperationStorage{
 		guardedOperationStorage: store,
@@ -96,5 +97,45 @@ func TestBackupLaunchesFixedFullAndDifferentialAutomation(t *testing.T) {
 				t.Fatalf("reserved=%+v config=%+v vars=%+v", store.reserved, docker.config, extraVars)
 			}
 		})
+	}
+}
+
+func TestBackupSchedulerReconcileLaunchesFixedCronOnlyAutomation(t *testing.T) {
+	store, cfg := backupFixture()
+	store.evidence.SchedulerOwners = []byte(`["postgresql-1","postgresql-2"]`)
+	docker := &operationDocker{}
+	logs := &operationLogs{}
+	handler := NewGuardedOperationsHandler(store, docker, logs, blockedPreflightWatcher{}, cfg, zerolog.Nop())
+	backupPreflight(t, handler, store, storage.OperationTypeBackupSchedulerReconcile)
+
+	if string(store.preflight.Blockers) != "[]" ||
+		store.preflight.Confirmation != "RECONCILE BACKUP SCHEDULER cluster-1" ||
+		!strings.Contains(string(store.preflight.Plan), "remove pgBackRest cron from non-owner nodes") ||
+		!strings.Contains(string(store.preflight.AffectedNodes), "postgresql-3") {
+		t.Fatalf("preflight=%+v", store.preflight)
+	}
+
+	request := httptest.NewRequest("POST", "/clusters/5/operations", nil)
+	request = request.WithContext(context.WithValue(request.Context(), tracer.CtxCidKey{}, "test-cid"))
+	response := handler.HandleOperation(clusterapi.PostClustersIDOperationsParams{
+		ID: 5, HTTPRequest: request,
+		Body: &models.RequestOperationStart{
+			PreflightID: &store.preflight.ID, Confirmation: &store.preflight.Confirmation,
+		},
+	})
+	if _, ok := response.(*clusterapi.PostClustersIDOperationsAccepted); !ok {
+		t.Fatalf("operation response=%#v", response)
+	}
+	var extraVars map[string]any
+	if err := json.Unmarshal([]byte(docker.config.ExtraVars), &extraVars); err != nil {
+		t.Fatal(err)
+	}
+	if store.reserved == nil || store.reserved.Type != storage.OperationTypeBackupSchedulerReconcile ||
+		docker.config.Playbook != backupPlaybook ||
+		extraVars["backup_operation_type"] != "reconcile" ||
+		extraVars["pgbackrest_scheduler_host"] != "postgresql-1" ||
+		extraVars["cron_jobs"] != nil || extraVars["playbook"] != nil ||
+		docker.calls != 1 || logs.calls != 1 {
+		t.Fatalf("reserved=%+v config=%+v vars=%+v", store.reserved, docker.config, extraVars)
 	}
 }

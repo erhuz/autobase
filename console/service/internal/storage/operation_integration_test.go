@@ -54,15 +54,15 @@ func TestOperationPreflightLockAndTerminalImmutability(t *testing.T) {
 	}
 
 	preflightReq := &CreateOperationPreflightReq{
-		ClusterID: cluster.ID, Type: OperationTypeSwitchover, Observed: []byte(`{"token":"cleartext"}`), Desired: []byte(`{}`),
+		ClusterID: cluster.ID, Type: OperationTypeBackupSchedulerReconcile, Observed: []byte(`{"token":"cleartext"}`), Desired: []byte(`{}`),
 		Checks: []byte(`[]`), Blockers: []byte(`[]`), Plan: []byte(`[]`), AffectedNodes: []byte(`[]`),
-		Confirmation: "SWITCHOVER TO postgresql-2", TopologyHash: "hash", ExpiresAt: time.Now().Add(time.Minute),
+		Confirmation: "RECONCILE BACKUP SCHEDULER migration-fixture", TopologyHash: "hash", ExpiresAt: time.Now().Add(time.Minute),
 	}
 	preflight, err := store.CreateOperationPreflight(ctx, preflightReq)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if preflight.Type != OperationTypeSwitchover {
+	if preflight.Type != OperationTypeBackupSchedulerReconcile {
 		t.Fatalf("preflight type = %q", preflight.Type)
 	}
 	var observed map[string]any

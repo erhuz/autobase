@@ -13,7 +13,7 @@
     - name: Validate fixed backup inputs
       ansible.builtin.assert:
         that:
-          - backup_operation_type | default('observe') in ['observe', 'full', 'diff']
+          - backup_operation_type | default('observe') in ['observe', 'full', 'diff', 'reconcile']
           - pgbackrest_scheduler_host in (groups.get('postgres_cluster', []) + groups.get('pgbackrest', []))
           - pgbackrest_freshness_seconds | int > 0
           - pgbackrest_restore_tested_at is none or pgbackrest_restore_tested_at is match('^[0-9]{4}-[0-9]{2}-[0-9]{2}T')
@@ -40,6 +40,48 @@
       when: >-
         hostvars[item].pgbackrest_scheduler_files.results | default([])
         | selectattr('stat.exists') | list | length > 0
+      delegate_to: localhost
+      delegate_facts: true
+      run_once: true
+
+    - name: Require scheduler ownership drift before reconcile
+      ansible.builtin.assert:
+        that:
+          - hostvars['localhost'].pgbackrest_scheduler_owners != [pgbackrest_scheduler_host]
+      when: backup_operation_type | default('observe') == 'reconcile'
+      run_once: true
+
+    - name: Reconcile pgBackRest scheduler ownership
+      ansible.builtin.include_role:
+        name: vitabaks.autobase.pgbackrest
+        tasks_from: scheduler
+      when: backup_operation_type | default('observe') == 'reconcile'
+
+    - name: Refresh pgBackRest scheduler files after reconcile
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ pgbackrest_cron_jobs | map(attribute='file') | unique }}"
+      register: pgbackrest_reconciled_scheduler_files
+      changed_when: false
+      when: backup_operation_type | default('observe') == 'reconcile'
+
+    - name: Reset reconciled scheduler owner evidence
+      ansible.builtin.set_fact:
+        pgbackrest_scheduler_owners: []
+      delegate_to: localhost
+      delegate_facts: true
+      run_once: true
+      when: backup_operation_type | default('observe') == 'reconcile'
+
+    - name: Collect reconciled scheduler owner evidence
+      ansible.builtin.set_fact:
+        pgbackrest_scheduler_owners: "{{ hostvars['localhost'].pgbackrest_scheduler_owners + [item] }}"
+      loop: "{{ groups.get('postgres_cluster', []) + groups.get('pgbackrest', []) }}"
+      when:
+        - backup_operation_type | default('observe') == 'reconcile'
+        - >-
+          hostvars[item].pgbackrest_reconciled_scheduler_files.results | default([])
+          | selectattr('stat.exists') | list | length > 0
       delegate_to: localhost
       delegate_facts: true
       run_once: true
@@ -178,3 +220,10 @@
             (backup_operation_type == 'full' and pgbackrest_full_epochs | length > 0)
             or (backup_operation_type == 'diff' and pgbackrest_diff_epochs | length > 0)
       when: backup_operation_type | default('observe') in ['full', 'diff']
+
+    - name: Require successful scheduler reconciliation
+      ansible.builtin.assert:
+        that:
+          - pgbackrest_final_info.rc == 0
+          - hostvars['localhost'].pgbackrest_scheduler_owners == [pgbackrest_scheduler_host]
+      when: backup_operation_type | default('observe') == 'reconcile'

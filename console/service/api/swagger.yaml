@@ -1134,7 +1134,7 @@ definitions:
     properties:
       type:
         type: string
-        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update, rolling_update, postgresql_upgrade, emergency_failover, restore, pitr, database_admin, extension_admin, pgbouncer_admin]
+        enum: [switchover, reload, rolling_restart, replica_reinit, backup_full, backup_diff, backup_scheduler_reconcile, query_analytics_enable, query_analytics_disable, node_add, node_remove, config_update, rolling_update, postgresql_upgrade, emergency_failover, restore, pitr, database_admin, extension_admin, pgbouncer_admin]
       target:
         type: string
       params:

@@ -274,7 +274,7 @@ func TestStock290Upgrade(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if version != 20260728100000 {
+		if version != 20260728130000 {
 			t.Fatalf("migration version = %d", version)
 		}
 	})

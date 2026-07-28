@@ -42,7 +42,7 @@ func automationEncryptionKey(cfg *configuration.Config) string {
 
 func requiredAutomationCredentials(operationType string) ([]automationCredentialPurpose, error) {
 	switch operationType {
-	case storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff:
+	case storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff, storage.OperationTypeBackupSchedulerReconcile:
 		return nil, nil
 	case storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:
 		return []automationCredentialPurpose{credentialPostgresSuperuser, credentialPatroniRestapi}, nil

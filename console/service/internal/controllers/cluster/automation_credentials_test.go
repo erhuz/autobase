@@ -33,6 +33,7 @@ func TestAutomationCredentialRequirementsAreDeclared(t *testing.T) {
 		storage.OperationTypeExtensionAdmin:        {credentialPostgresSuperuser},
 		storage.OperationTypePgBouncerAdmin:        {credentialPostgresSuperuser},
 	}
+	tests[storage.OperationTypeBackupSchedulerReconcile] = nil
 	for operationType, expected := range tests {
 		if !supportedOperationType(operationType) {
 			t.Fatalf("%s is not a supported guarded operation", operationType)
