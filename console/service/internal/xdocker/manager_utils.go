@@ -10,9 +10,14 @@ import (
 	"github.com/docker/docker/errdefs"
 )
 
+func contextCID(ctx context.Context) string {
+	cid, _ := ctx.Value(tracer.CtxCidKey{}).(string)
+	return cid
+}
+
 func (m *dockerManager) pullImage(ctx context.Context, dockerImage string) error {
 	dockerImage = strings.TrimSpace(dockerImage)
-	localLog := m.log.With().Str("cid", ctx.Value(tracer.CtxCidKey{}).(string)).Logger()
+	localLog := m.log.With().Str("cid", contextCID(ctx)).Logger()
 
 	inspectRes, _, err := m.cli.ImageInspectWithRaw(ctx, dockerImage)
 	if err != nil {

@@ -24,6 +24,7 @@ C13: future release compatibility declared/tested as one `{ui,api,console_db,aut
 C14: migrations forward + ordered; Console persistent volume reset ⊥.
 C15: implementation extends existing Swagger, Go service/storage/watchers, React routes, Goose migrations, Automation playbooks/roles.
 C16: automation service credentials = separate-purpose + cluster-bound + attach-only; per-operation override + live PostgreSQL/Patroni password rotation ⊥.
+C17: DCS health reuses authenticated Patroni observation; direct etcd client + TLS-key distribution ⊥.
 
 ## §I
 
@@ -40,8 +41,8 @@ api.run: `POST /clusters/{id}/operations` `{preflight_id,confirmation}` → `{op
 api.credential: `PUT /clusters/{id}/credential` `{secret_id}` → `ClusterInfo`; secret value ⊥ response.
 api.automation_credentials: `PUT /clusters/{id}/automation-credentials` `{postgres_superuser_secret_id:int|null,postgres_replication_secret_id:int|null,patroni_restapi_secret_id:int|null}` → `ClusterInfo`; full atomic replace; values ⊥ response.
 api.ops: `GET /operations` + `GET /operations/{id}` + `GET /operations/{id}/log` → durable operation/audit state.
-op.v1: `type ∈ {switchover,reload,rolling_restart,replica_reinit,backup_full,backup_diff,query_analytics_enable,query_analytics_disable}`.
-op.credentials: `query_analytics_enable|query_analytics_disable` → superuser+REST; `node_add|config_update|postgresql_upgrade|restore|pitr` → superuser+replication+REST; `backup_full|backup_diff` → ∅; remaining guarded ops → superuser; undeclared op → block.
+op.v1: `type ∈ {switchover,reload,rolling_restart,replica_reinit,backup_full,backup_diff,backup_scheduler_reconcile,query_analytics_enable,query_analytics_disable}`.
+op.credentials: `query_analytics_enable|query_analytics_disable` → superuser+REST; `node_add|config_update|postgresql_upgrade|restore|pitr` → superuser+replication+REST; `backup_full|backup_diff|backup_scheduler_reconcile` → ∅; remaining guarded ops → superuser; undeclared op → block.
 op.state: `queued → running → succeeded|failed|cancelled`.
 db: `console/db/migrations` → preserve existing data; extend operation/preflight/audit/backup-evidence persistence.
 db.query: Console DB → analytics source + fingerprint + complete bucket + retained sample + 7d retention.
@@ -115,6 +116,11 @@ V56: cluster detail → route-backed `{overview,query-performance,access}`; over
 V57: viewport ≤600px → sidebar width = 60px + cluster tabs/content reachable; horizontal content clipping ⊥.
 V58: query analytics enable|disable preserves effective preload + HBA when Patroni DCS omits either; collector rules scoped + reversible.
 V59: ∀ guarded op → credential-purpose set declared; required same-project password secrets attached + decryptable @ preflight, IDs+`updated_at` bound, values launch-only; running target auth probed before first mutation; isolated bootstrap validates before mutation + probes every target after service start; failure → next mutation/verification ⊥.
+V60: DCS `reachable=true` iff every current healthy member has fresh Patroni-observed `dcs_last_seen`; configured type/members alone → `not_observed`; stale/missing/member disagreement → degraded; direct etcd client/TLS-key distribution ⊥.
+V61: Automation launch name empty → Docker assigns uniqueness; lifecycle uses container ID; terminal observer cleanup reaches Docker after success|error with CID present|absent; concurrent launch + cleanup tested; app name generator/retry registry ⊥.
+V62: backup observer read-only; duplicate scheduler owners visible + backup mutation blocked; guarded `backup_scheduler_reconcile` reuses pgBackRest role → cron only on `pgbackrest_scheduler_host`; arbitrary cron/playbook vars ⊥.
+V63: `restore_tested_at` updated only after successful isolated restore/PITR final verification; configured/operator timestamp alone ⊥; absent evidence → recoverability degraded.
+V64: DB/Docker diagnostic logging accepts typed-nil args + absent `CtxCidKey`; panic ⊥; operation flow unchanged; Docker bodies/secrets ⊥ logs.
 
 ## §T
 
@@ -152,6 +158,10 @@ T30|x|cut reproducible `2.9.0-management.2` release + direct `2.9.0` upgrade gat
 T31|x|cut `2.9.0-management.3` PGSM imported-cluster hotfix release|V11,V12,V14,V15,V46,V47,V52,V55,V58,I.image,I.release,I.release.manifest,I.verify
 T32|x|bind 3 cluster automation password secrets + Access UI + purpose map + pre-mutation auth probes + half-applied-op recovery runbook|V4,V12,V13,V19,V22,V32,V44,V54,V59,I.ui.access,I.ui.secrets,I.api.automation_credentials,I.op.credentials,I.automation.credentials,I.verify
 T33|x|cut reproducible `2.9.0-management.4` credential-safety release|V11,V12,V14,V15,V46,V47,V52,V55,V59,I.image,I.release,I.release.manifest,I.verify
+T34|x|use Docker-assigned Automation names; make DB/Docker logging panic-safe; verify concurrent launch + terminal observer cleanup|V11,V44,V47,V61,V64,I.automation,I.verify
+T35|.|derive DCS reachability from existing Patroni watcher evidence + health/UI contract|V16,V23,V32,V60,I.api.health,I.authority,I.verify
+T36|.|add guarded pgBackRest scheduler reconcile via existing role + duplicate-owner contract|V4,V17,V21,V22,V26,V27,V32,V54,V62,I.api.preflight,I.api.run,I.op.v1,I.authority,I.automation,I.verify
+T37|.|bind restore evidence to verified isolated restore/PITR completion|V17,V26,V30,V32,V63,I.api.health,I.authority,I.automation,I.verify
 
 ## §B
 
@@ -238,3 +248,7 @@ B79|2026-07-27|query analytics required DCS `pg_hba`; Autobase/imported clusters
 B80|2026-07-28|maintenance trusted stale Patroni superuser config; Query Analytics changed cluster before TCP auth probe|V59
 B81|2026-07-28|T32 focused gates retained pre-credential payload + implicit UI/YAML runner assumptions|V47,V59
 B82|2026-07-28|isolated restore target may have no service to authenticate before destructive bootstrap|V59
+B83|2026-07-28|DCS card used configured inventory only; healthy live etcd remained `configured_not_observed`|V60
+B84|2026-07-28|finite app-generated Docker names collided; backup observer stopped before evidence upsert|V61
+B85|2026-07-28|pgBackRest scheduler cron remained on every member; concurrent jobs raced repository locks|V62
+B86|2026-07-28|typed-nil backup timestamps panicked SQL trace; CID-less deferred Docker cleanup panicked before DELETE → exited containers accumulated|V61,V64

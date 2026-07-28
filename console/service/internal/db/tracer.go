@@ -112,7 +112,7 @@ func logQueryArgs(args []any) string {
 		}
 
 		if stringer, ok := a.(fmt.Stringer); ok {
-			paramsStr.WriteString(stringer.String())
+			paramsStr.WriteString(fmt.Sprint(stringer))
 		} else {
 			paramsStr.WriteString(render.Render(a))
 		}

@@ -4,14 +4,11 @@ import (
 	"bufio"
 	"context"
 	"net/http"
-	"postgresql-cluster-console/pkg/tracer"
 	"strings"
-	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
-	"github.com/goombaio/namegenerator"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -46,7 +43,7 @@ func NewDockerManager(host string, image string) (IManager, error) {
 }
 
 func (m *dockerManager) ManageCluster(ctx context.Context, config *ManageClusterConfig) (InstanceID, error) {
-	localLog := m.log.With().Str("cid", ctx.Value(tracer.CtxCidKey{}).(string)).Logger()
+	localLog := m.log.With().Str("cid", contextCID(ctx)).Logger()
 	err := m.pullImage(ctx, m.image)
 	if err != nil {
 		return "", err
@@ -85,7 +82,7 @@ func (m *dockerManager) ManageCluster(ctx context.Context, config *ManageCluster
 
 				return mounts
 			}(),
-		}, nil, nil, namegenerator.NewNameGenerator(time.Now().UTC().UnixNano()).Generate())
+		}, nil, nil, "")
 
 	if err != nil {
 		return "", err
@@ -123,7 +120,7 @@ func (m *dockerManager) GetStatus(ctx context.Context, id InstanceID) (string, e
 }
 
 func (m *dockerManager) StoreContainerLogs(ctx context.Context, ID InstanceID, store func(logMessage string)) {
-	localLog := m.log.With().Str("cid", ctx.Value(tracer.CtxCidKey{}).(string)).Logger()
+	localLog := m.log.With().Str("cid", contextCID(ctx)).Logger()
 	localLog.Trace().Msg("StoreContainerLogs called")
 	hijackedCon, err := m.cli.ContainerAttach(ctx, string(ID), container.AttachOptions{
 		Stream:     true,
