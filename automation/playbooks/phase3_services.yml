@@ -85,6 +85,9 @@
       loop: "{{ phase3_nodes }}"
       changed_when: false
 
+- name: vitabaks.autobase.phase3_services | Authenticate before mutation
+  ansible.builtin.import_playbook: operation_credentials.yml
+
 - name: vitabaks.autobase.phase3_services | Capture current live state
   hosts: phase3_verify
   gather_facts: true

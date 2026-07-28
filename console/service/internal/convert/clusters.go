@@ -26,7 +26,12 @@ func ClusterToSwagger(cl *storage.Cluster, servers []storage.Server, environment
 		PostgresVersion: cl.PostgreVersion,
 		ProjectName:     projectCode,
 		SecretID:        cl.SecretID,
-		Status:          cl.Status,
+		AutomationCredentials: &models.ClusterInfoAutomationCredentials{
+			PostgresSuperuserSecretID:   cl.PostgresSuperuserSecretID,
+			PostgresReplicationSecretID: cl.PostgresReplicationSecretID,
+			PatroniRestapiSecretID:      cl.PatroniRestapiSecretID,
+		},
+		Status: cl.Status,
 	}
 
 	// Add extra_vars (as JSON string)

@@ -438,6 +438,31 @@ paths:
           schema:
             $ref: "#/definitions/Response.Error"
 
+  /clusters/{id}/automation-credentials:
+    put:
+      summary: "Replace cluster automation credential bindings"
+      tags:
+        - cluster
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/Request.ClusterAutomationCredentials"
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: "#/definitions/ClusterInfo"
+        '400':
+          description: Error
+          schema:
+            $ref: "#/definitions/Response.Error"
+
   /clusters/{id}/query-performance:
     get:
       summary: "Get cluster query performance overview"
@@ -1816,6 +1841,22 @@ definitions:
         type: integer
         format: int64
 
+  Request.ClusterAutomationCredentials:
+    type: object
+    properties:
+      postgres_superuser_secret_id:
+        type: integer
+        format: int64
+        x-nullable: true
+      postgres_replication_secret_id:
+        type: integer
+        format: int64
+        x-nullable: true
+      patroni_restapi_secret_id:
+        type: integer
+        format: int64
+        x-nullable: true
+
 
   Response.ClusterDefaultName:
     type: object
@@ -2060,6 +2101,8 @@ definitions:
         type: integer
         format: int64
         x-nullable: true
+      automation_credentials:
+        $ref: "#/definitions/ClusterInfo.AutomationCredentials"
       extra_vars:
         type: string
         description: "Ansible variables"
@@ -2073,6 +2116,22 @@ definitions:
     properties:
       connection_info:
         type: object
+
+  ClusterInfo.AutomationCredentials:
+    type: object
+    properties:
+      postgres_superuser_secret_id:
+        type: integer
+        format: int64
+        x-nullable: true
+      postgres_replication_secret_id:
+        type: integer
+        format: int64
+        x-nullable: true
+      patroni_restapi_secret_id:
+        type: integer
+        format: int64
+        x-nullable: true
 
   ClusterInfo.Instance:
     type: object

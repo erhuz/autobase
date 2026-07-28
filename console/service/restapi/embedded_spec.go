@@ -236,6 +236,44 @@ func init() {
         }
       }
     },
+    "/clusters/{id}/automation-credentials": {
+      "put": {
+        "tags": [
+          "cluster"
+        ],
+        "summary": "Replace cluster automation credential bindings",
+        "parameters": [
+          {
+            "type": "integer",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/Request.ClusterAutomationCredentials"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/ClusterInfo"
+            }
+          },
+          "400": {
+            "description": "Error",
+            "schema": {
+              "$ref": "#/definitions/Response.Error"
+            }
+          }
+        }
+      }
+    },
     "/clusters/{id}/credential": {
       "put": {
         "tags": [
@@ -1569,6 +1607,9 @@ func init() {
       "description": "Cluster info",
       "type": "object",
       "properties": {
+        "automation_credentials": {
+          "$ref": "#/definitions/ClusterInfo.AutomationCredentials"
+        },
         "cluster_location": {
           "description": "Code of location",
           "type": "string",
@@ -1636,6 +1677,26 @@ func init() {
       "properties": {
         "connection_info": {
           "type": "object"
+        }
+      }
+    },
+    "ClusterInfo.AutomationCredentials": {
+      "type": "object",
+      "properties": {
+        "patroni_restapi_secret_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-nullable": true
+        },
+        "postgres_replication_secret_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-nullable": true
+        },
+        "postgres_superuser_secret_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-nullable": true
         }
       }
     },
@@ -2218,6 +2279,26 @@ func init() {
       "properties": {
         "value": {
           "type": "object",
+          "x-nullable": true
+        }
+      }
+    },
+    "Request.ClusterAutomationCredentials": {
+      "type": "object",
+      "properties": {
+        "patroni_restapi_secret_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-nullable": true
+        },
+        "postgres_replication_secret_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-nullable": true
+        },
+        "postgres_superuser_secret_id": {
+          "type": "integer",
+          "format": "int64",
           "x-nullable": true
         }
       }
@@ -3728,6 +3809,44 @@ func init() {
         }
       }
     },
+    "/clusters/{id}/automation-credentials": {
+      "put": {
+        "tags": [
+          "cluster"
+        ],
+        "summary": "Replace cluster automation credential bindings",
+        "parameters": [
+          {
+            "type": "integer",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/Request.ClusterAutomationCredentials"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/ClusterInfo"
+            }
+          },
+          "400": {
+            "description": "Error",
+            "schema": {
+              "$ref": "#/definitions/Response.Error"
+            }
+          }
+        }
+      }
+    },
     "/clusters/{id}/credential": {
       "put": {
         "tags": [
@@ -5061,6 +5180,9 @@ func init() {
       "description": "Cluster info",
       "type": "object",
       "properties": {
+        "automation_credentials": {
+          "$ref": "#/definitions/ClusterInfo.AutomationCredentials"
+        },
         "cluster_location": {
           "description": "Code of location",
           "type": "string",
@@ -5128,6 +5250,26 @@ func init() {
       "properties": {
         "connection_info": {
           "type": "object"
+        }
+      }
+    },
+    "ClusterInfo.AutomationCredentials": {
+      "type": "object",
+      "properties": {
+        "patroni_restapi_secret_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-nullable": true
+        },
+        "postgres_replication_secret_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-nullable": true
+        },
+        "postgres_superuser_secret_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-nullable": true
         }
       }
     },
@@ -5713,6 +5855,26 @@ func init() {
       "properties": {
         "value": {
           "type": "object",
+          "x-nullable": true
+        }
+      }
+    },
+    "Request.ClusterAutomationCredentials": {
+      "type": "object",
+      "properties": {
+        "patroni_restapi_secret_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-nullable": true
+        },
+        "postgres_replication_secret_id": {
+          "type": "integer",
+          "format": "int64",
+          "x-nullable": true
+        },
+        "postgres_superuser_secret_id": {
+          "type": "integer",
+          "format": "int64",
           "x-nullable": true
         }
       }

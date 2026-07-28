@@ -233,5 +233,17 @@
   "managementCredentialReady": "Management actions can use the attached credential.",
   "managementCredentialRequired": "Management actions remain blocked until an SSH key or password is attached.",
   "managementCredentialAttached": "Management credential attached.",
-  "managementCredentialAttachError": "Management credential could not be attached."
+  "managementCredentialAttachError": "Management credential could not be attached.",
+  "automationCredentials": "Automation credentials",
+  "automationCredentialsDescription": "Attach the password secrets used to authenticate PostgreSQL and Patroni before guarded changes.",
+  "postgresSuperuserCredential": "PostgreSQL superuser",
+  "postgresReplicationCredential": "PostgreSQL replication",
+  "patroniRestapiCredential": "Patroni REST API",
+  "selectPasswordCredential": "Select a password secret",
+  "automationCredentialReady": "Ready",
+  "automationCredentialRequired": "Required for some operations",
+  "saveAutomationCredentials": "Save automation credentials",
+  "automationCredentialsSaved": "Automation credentials saved.",
+  "automationCredentialsSaveError": "Automation credentials could not be saved.",
+  "noPasswordCredentials": "Create password secrets in Settings before attaching automation credentials."
 }

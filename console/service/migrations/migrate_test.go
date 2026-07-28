@@ -229,12 +229,52 @@ func TestStock290Upgrade(t *testing.T) {
 		}
 	})
 
+	t.Run("adds empty automation credential bindings", func(t *testing.T) {
+		var bindingsEmpty bool
+		if err := pool.QueryRow(ctx, `
+			select postgres_superuser_secret_id is null
+				and postgres_replication_secret_id is null
+				and patroni_restapi_secret_id is null
+			from public.clusters where cluster_name = 'migration-fixture'`).Scan(&bindingsEmpty); err != nil {
+			t.Fatal(err)
+		}
+		if !bindingsEmpty {
+			t.Fatal("stock cluster automation credential bindings changed")
+		}
+
+		var secretID int64
+		if err := pool.QueryRow(ctx, `select add_secret(
+			(select project_id from public.projects where project_name = 'migration-fixture'),
+			'password', 'automation-only', '{"username":"postgres","password":"fixture"}', $1)`,
+			cfg.EncryptionKey).Scan(&secretID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `
+			update public.clusters set postgres_superuser_secret_id = $1
+			where cluster_name = 'migration-fixture'`, secretID); err != nil {
+			t.Fatal(err)
+		}
+		var used bool
+		var usedBy string
+		if err := pool.QueryRow(ctx, `
+			select used, used_by_clusters from public.v_secrets_list where secret_id = $1`,
+			secretID).Scan(&used, &usedBy); err != nil {
+			t.Fatal(err)
+		}
+		if !used || usedBy != "migration-fixture" {
+			t.Fatalf("automation secret used=%t clusters=%q", used, usedBy)
+		}
+		if _, err := pool.Exec(ctx, "delete from public.secrets where secret_id = $1", secretID); err == nil {
+			t.Fatal("attached automation secret was deleted")
+		}
+	})
+
 	t.Run("reaches current migration", func(t *testing.T) {
 		version, err := goose.GetDBVersionContext(ctx, db)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if version != 20260724130000 {
+		if version != 20260728100000 {
 			t.Fatalf("migration version = %d", version)
 		}
 	})

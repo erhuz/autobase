@@ -21,7 +21,7 @@
       "image": "autobase/console_db",
       "digest": "sha256:03b479cb77d6254d4c4e942df899b516e269dcd708db4056361b5efb2e715895",
       "version_source": "official_2.9.0_digest",
-      "migration_head": 20260724130000
+      "migration_head": 20260728100000
     },
     "automation": {
       "path": "automation",

@@ -74,6 +74,9 @@
       when: lifecycle_pgbackrest_enabled | bool
       changed_when: false
 
+- name: vitabaks.autobase.lifecycle_pgcluster | Authenticate before mutation
+  ansible.builtin.import_playbook: operation_credentials.yml
+
 - name: vitabaks.autobase.lifecycle_pgcluster | Refresh topology and failover guard
   hosts: lifecycle_before
   gather_facts: true

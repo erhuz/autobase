@@ -95,6 +95,7 @@ jobs:
           ansible-playbook automation/tests/restore_pgcluster_contract.yml
           ansible-playbook automation/tests/database_admin_contract.yml
           ansible-playbook automation/tests/phase3_services_contract.yml
+          ansible-playbook automation/tests/operation_credentials_contract.yml
 
   ui:
     runs-on: ubuntu-latest
@@ -117,6 +118,7 @@ jobs:
         run: |
           yarn vitest \
             src/entities/cluster/cluster-info/ui/index.test.tsx \
+            src/entities/secret-form-block/ui/PasswordSecret.test.tsx \
             src/widgets/cluster-health/ui/index.test.tsx \
             src/widgets/query-performance/ui/index.test.tsx \
             src/pages/operation-log/ui/index.test.tsx \

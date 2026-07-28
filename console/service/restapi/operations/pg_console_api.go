@@ -288,6 +288,12 @@ func NewPgConsoleAPI(spec *loads.Document) *PgConsoleAPI {
 			return middleware.NotImplemented("operation setting.PostSettings has not yet been implemented")
 		}),
 
+		ClusterPutClustersIDAutomationCredentialsHandler: cluster.PutClustersIDAutomationCredentialsHandlerFunc(func(params cluster.PutClustersIDAutomationCredentialsParams) middleware.Responder {
+			_ = params
+
+			return middleware.NotImplemented("operation cluster.PutClustersIDAutomationCredentials has not yet been implemented")
+		}),
+
 		ClusterPutClustersIDCredentialHandler: cluster.PutClustersIDCredentialHandlerFunc(func(params cluster.PutClustersIDCredentialParams) middleware.Responder {
 			_ = params
 
@@ -410,6 +416,8 @@ type PgConsoleAPI struct {
 	SecretPostSecretsHandler secret.PostSecretsHandler
 	// SettingPostSettingsHandler sets the operation handler for the post settings operation
 	SettingPostSettingsHandler setting.PostSettingsHandler
+	// ClusterPutClustersIDAutomationCredentialsHandler sets the operation handler for the put clusters ID automation credentials operation
+	ClusterPutClustersIDAutomationCredentialsHandler cluster.PutClustersIDAutomationCredentialsHandler
 	// ClusterPutClustersIDCredentialHandler sets the operation handler for the put clusters ID credential operation
 	ClusterPutClustersIDCredentialHandler cluster.PutClustersIDCredentialHandler
 
@@ -608,6 +616,9 @@ func (o *PgConsoleAPI) Validate() error {
 	}
 	if o.SettingPostSettingsHandler == nil {
 		unregistered = append(unregistered, "setting.PostSettingsHandler")
+	}
+	if o.ClusterPutClustersIDAutomationCredentialsHandler == nil {
+		unregistered = append(unregistered, "cluster.PutClustersIDAutomationCredentialsHandler")
 	}
 	if o.ClusterPutClustersIDCredentialHandler == nil {
 		unregistered = append(unregistered, "cluster.PutClustersIDCredentialHandler")
@@ -861,6 +872,10 @@ func (o *PgConsoleAPI) initHandlerCache() {
 		o.handlers["POST"] = make(map[string]http.Handler)
 	}
 	o.handlers["POST"]["/settings"] = setting.NewPostSettings(o.context, o.SettingPostSettingsHandler)
+	if o.handlers["PUT"] == nil {
+		o.handlers["PUT"] = make(map[string]http.Handler)
+	}
+	o.handlers["PUT"]["/clusters/{id}/automation-credentials"] = cluster.NewPutClustersIDAutomationCredentials(o.context, o.ClusterPutClustersIDAutomationCredentialsHandler)
 	if o.handlers["PUT"] == nil {
 		o.handlers["PUT"] = make(map[string]http.Handler)
 	}

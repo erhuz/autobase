@@ -67,12 +67,22 @@ func (s *guardedOperationStorage) GetCluster(context.Context, int64) (*storage.C
 	return s.cluster, nil
 }
 
-func (s *guardedOperationStorage) GetSecret(context.Context, int64) (*storage.SecretView, error) {
-	return &storage.SecretView{ProjectID: s.cluster.ProjectID, ID: *s.cluster.SecretID, Type: string(models.SecretTypeSSHKey)}, nil
+func (s *guardedOperationStorage) GetSecret(_ context.Context, id int64) (*storage.SecretView, error) {
+	if s.cluster.SecretID != nil && id == *s.cluster.SecretID {
+		return &storage.SecretView{
+			ProjectID: s.cluster.ProjectID, ID: id, Type: string(models.SecretTypeSSHKey),
+		}, nil
+	}
+	return &storage.SecretView{
+		ProjectID: s.cluster.ProjectID, ID: id, Type: string(models.SecretTypePassword),
+	}, nil
 }
 
-func (s *guardedOperationStorage) GetSecretVal(context.Context, int64, string) ([]byte, error) {
-	return []byte(`{"SSH_PRIVATE_KEY":"fixture-key"}`), nil
+func (s *guardedOperationStorage) GetSecretVal(_ context.Context, id int64, _ string) ([]byte, error) {
+	if s.cluster.SecretID != nil && id == *s.cluster.SecretID {
+		return []byte(`{"SSH_PRIVATE_KEY":"fixture-key"}`), nil
+	}
+	return []byte(`{"USERNAME":"postgres","PASSWORD":"service-secret"}`), nil
 }
 
 func (s *guardedOperationStorage) GetClusterServers(context.Context, int64) ([]storage.Server, error) {
@@ -209,8 +219,12 @@ func TestQueryAnalyticsPreflightReportsAndBlocksManagementDrift(t *testing.T) {
 func TestGuardedOperationRejectsUnsupportedAndChangedObservedState(t *testing.T) {
 	now := time.Now().UTC()
 	credentialID := int64(7)
+	superuserID, restapiID := int64(8), int64(10)
 	store := &guardedOperationStorage{
-		cluster: &storage.Cluster{ID: 5, ProjectID: 3, PostgreVersion: 16, SecretID: &credentialID},
+		cluster: &storage.Cluster{
+			ID: 5, ProjectID: 3, PostgreVersion: 16, SecretID: &credentialID,
+			PostgresSuperuserSecretID: &superuserID, PatroniRestapiSecretID: &restapiID,
+		},
 		servers: []storage.Server{
 			{Name: "postgresql-1", Role: "leader", Status: "running", UpdatedAt: &now},
 			{Name: "postgresql-2", Role: "replica", Status: "streaming", UpdatedAt: &now},
@@ -258,11 +272,13 @@ func TestGuardedOperationRejectsUnsupportedAndChangedObservedState(t *testing.T)
 func TestGuardedOperationRecordsLaunchFailure(t *testing.T) {
 	now := time.Now().UTC()
 	credentialID := int64(7)
+	superuserID, restapiID := int64(8), int64(10)
 	store := &guardedOperationStorage{
 		cluster: &storage.Cluster{
 			ID: 5, ProjectID: 3, Name: "cluster-1", PostgreVersion: 16,
 			SecretID:              &credentialID,
 			QueryAnalyticsManaged: true, QueryAnalyticsDesired: true,
+			PostgresSuperuserSecretID: &superuserID, PatroniRestapiSecretID: &restapiID,
 		},
 		servers: []storage.Server{
 			{Name: "postgresql-1", Role: "leader", Status: "running", UpdatedAt: &now},
@@ -301,11 +317,13 @@ func TestGuardedOperationRecordsLaunchFailure(t *testing.T) {
 func TestGuardedOperationLaunchesFixedAutomation(t *testing.T) {
 	now := time.Now().UTC()
 	credentialID := int64(7)
+	superuserID, restapiID := int64(8), int64(10)
 	store := &guardedOperationStorage{
 		cluster: &storage.Cluster{
 			ID: 5, ProjectID: 3, Name: "cluster-1", PostgreVersion: 16,
 			SecretID:              &credentialID,
 			QueryAnalyticsManaged: true, QueryAnalyticsDesired: true,
+			PostgresSuperuserSecretID: &superuserID, PatroniRestapiSecretID: &restapiID,
 			ExtraVars: []byte(`{"playbook":"untrusted.yml","query_analytics_state":"enabled","enable_pg_stat_monitor":true}`),
 		},
 		servers: []storage.Server{

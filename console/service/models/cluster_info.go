@@ -19,6 +19,9 @@ import (
 // swagger:model ClusterInfo
 type ClusterInfo struct {
 
+	// automation credentials
+	AutomationCredentials *ClusterInfoAutomationCredentials `json:"automation_credentials,omitempty"`
+
 	// Code of location
 	// Example: eu-north-1
 	ClusterLocation string `json:"cluster_location,omitempty"`
@@ -73,6 +76,10 @@ type ClusterInfo struct {
 func (m *ClusterInfo) Validate(formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.validateAutomationCredentials(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validateCreationTime(formats); err != nil {
 		res = append(res, err)
 	}
@@ -84,6 +91,29 @@ func (m *ClusterInfo) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *ClusterInfo) validateAutomationCredentials(formats strfmt.Registry) error {
+	if typeutils.IsZero(m.AutomationCredentials) { // not required
+		return nil
+	}
+
+	if m.AutomationCredentials != nil {
+		if err := m.AutomationCredentials.Validate(formats); err != nil {
+			ve := new(errors.Validation)
+			if stderrors.As(err, &ve) {
+				return ve.ValidateName("automation_credentials")
+			}
+			ce := new(errors.CompositeError)
+			if stderrors.As(err, &ce) {
+				return ce.ValidateName("automation_credentials")
+			}
+
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -133,6 +163,10 @@ func (m *ClusterInfo) validateServers(formats strfmt.Registry) error {
 func (m *ClusterInfo) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.contextValidateAutomationCredentials(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.contextValidateServers(ctx, formats); err != nil {
 		res = append(res, err)
 	}
@@ -140,6 +174,31 @@ func (m *ClusterInfo) ContextValidate(ctx context.Context, formats strfmt.Regist
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *ClusterInfo) contextValidateAutomationCredentials(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.AutomationCredentials != nil {
+
+		if typeutils.IsZero(m.AutomationCredentials) { // not required
+			return nil
+		}
+
+		if err := m.AutomationCredentials.ContextValidate(ctx, formats); err != nil {
+			ve := new(errors.Validation)
+			if stderrors.As(err, &ve) {
+				return ve.ValidateName("automation_credentials")
+			}
+			ce := new(errors.CompositeError)
+			if stderrors.As(err, &ce) {
+				return ce.ValidateName("automation_credentials")
+			}
+
+			return err
+		}
+	}
+
 	return nil
 }
 

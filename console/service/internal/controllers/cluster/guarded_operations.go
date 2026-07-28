@@ -219,45 +219,58 @@ func (h *guardedOperationsHandler) preflightState(ctx context.Context, clusterIn
 	if _, credentialErr := h.managementCredential(ctx, clusterInfo); credentialErr != nil {
 		state.blockers = append(state.blockers, "management credential attached")
 	}
+	if err = h.bindAutomationCredentialPreflight(ctx, clusterInfo, operationType, state); err != nil {
+		return nil, err
+	}
 	return state, nil
 }
 
 func (h *guardedOperationsHandler) operationInputs(ctx context.Context, clusterInfo *storage.Cluster, operationType string, desired []byte) ([]string, []byte, string, error) {
+	var (
+		envs      []string
+		extraVars []byte
+		playbook  string
+		err       error
+	)
 	switch operationType {
 	case storage.OperationTypeSwitchover:
-		envs, extraVars, err := h.switchoverOperationInputs(ctx, clusterInfo, desired)
-		return envs, extraVars, switchoverPlaybook, err
+		envs, extraVars, playbook = nil, nil, switchoverPlaybook
+		envs, extraVars, err = h.switchoverOperationInputs(ctx, clusterInfo, desired)
 	case storage.OperationTypeReload, storage.OperationTypeRollingRestart:
-		envs, extraVars, playbook, err := h.maintenanceOperationInputs(ctx, clusterInfo, operationType, desired)
-		return envs, extraVars, playbook, err
+		envs, extraVars, playbook, err = h.maintenanceOperationInputs(ctx, clusterInfo, operationType, desired)
 	case storage.OperationTypeReplicaReinit:
-		envs, extraVars, err := h.replicaReinitOperationInputs(ctx, clusterInfo, desired)
-		return envs, extraVars, replicaReinitPlaybook, err
+		playbook = replicaReinitPlaybook
+		envs, extraVars, err = h.replicaReinitOperationInputs(ctx, clusterInfo, desired)
 	case storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff:
-		envs, extraVars, err := h.backupOperationInputs(ctx, clusterInfo, operationType, desired)
-		return envs, extraVars, backupPlaybook, err
+		playbook = backupPlaybook
+		envs, extraVars, err = h.backupOperationInputs(ctx, clusterInfo, operationType, desired)
 	case storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:
 		state, _ := queryAnalyticsState(operationType)
-		envs, extraVars, err := h.queryAnalyticsOperationInputs(ctx, clusterInfo, state)
-		return envs, extraVars, queryAnalyticsPlaybook, err
+		playbook = queryAnalyticsPlaybook
+		envs, extraVars, err = h.queryAnalyticsOperationInputs(ctx, clusterInfo, state)
 	case storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate:
-		envs, extraVars, err := h.lifecycleOperationInputs(ctx, clusterInfo, operationType, desired)
-		return envs, extraVars, lifecyclePlaybook, err
+		playbook = lifecyclePlaybook
+		envs, extraVars, err = h.lifecycleOperationInputs(ctx, clusterInfo, operationType, desired)
 	case storage.OperationTypeRollingUpdate, storage.OperationTypePostgreSQLUpgrade, storage.OperationTypeEmergencyFailover:
-		envs, extraVars, err := h.phase2OperationInputs(ctx, clusterInfo, operationType, desired)
-		return envs, extraVars, phase2Playbook, err
+		playbook = phase2Playbook
+		envs, extraVars, err = h.phase2OperationInputs(ctx, clusterInfo, operationType, desired)
 	case storage.OperationTypeRestore, storage.OperationTypePITR:
-		envs, extraVars, err := h.recoveryOperationInputs(ctx, clusterInfo, operationType, desired)
-		return envs, extraVars, recoveryPlaybook, err
+		playbook = recoveryPlaybook
+		envs, extraVars, err = h.recoveryOperationInputs(ctx, clusterInfo, operationType, desired)
 	case storage.OperationTypeDatabaseAdmin:
-		envs, extraVars, err := h.databaseAdminOperationInputs(ctx, clusterInfo, desired)
-		return envs, extraVars, databaseAdminPlaybook, err
+		playbook = databaseAdminPlaybook
+		envs, extraVars, err = h.databaseAdminOperationInputs(ctx, clusterInfo, desired)
 	case storage.OperationTypeExtensionAdmin, storage.OperationTypePgBouncerAdmin:
-		envs, extraVars, err := h.phase3ServicesOperationInputs(ctx, clusterInfo, operationType, desired)
-		return envs, extraVars, phase3ServicesPlaybook, err
+		playbook = phase3ServicesPlaybook
+		envs, extraVars, err = h.phase3ServicesOperationInputs(ctx, clusterInfo, operationType, desired)
 	default:
 		return nil, nil, "", errors.New("unsupported operation type")
 	}
+	if err != nil {
+		return nil, nil, "", err
+	}
+	extraVars, err = h.injectAutomationCredentials(ctx, clusterInfo, operationType, extraVars)
+	return envs, extraVars, playbook, err
 }
 
 func (h *guardedOperationsHandler) baseOperationInputs(ctx context.Context, clusterInfo *storage.Cluster) ([]string, map[string]any, error) {

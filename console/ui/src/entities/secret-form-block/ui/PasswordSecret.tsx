@@ -36,8 +36,11 @@ const PasswordSecretBlock: React.FC = () => {
         render={({ field: { value, onChange } }) => (
           <TextField
             required
+            type="password"
+            autoComplete="new-password"
             value={value}
             onChange={onChange}
+            fullWidth
             error={!!errors[SECRET_MODAL_CONTENT_FORM_FIELD_NAMES.PASSWORD]}
             helperText={errors[SECRET_MODAL_CONTENT_FORM_FIELD_NAMES.PASSWORD]?.message ?? ''}
             size="small"

@@ -104,6 +104,7 @@ func NewService(
 	api.ClusterGetClustersHandler = cluster.NewGetClustersHandler(db, log.Logger)
 	api.ClusterGetClustersIDHandler = cluster.NewGetClusterHandler(db, log.Logger)
 	api.ClusterPutClustersIDCredentialHandler = cluster.NewPutClusterCredentialHandler(db)
+	api.ClusterPutClustersIDAutomationCredentialsHandler = cluster.NewPutClusterAutomationCredentialsHandler(db, cfg)
 	api.ClusterGetClustersIDHealthHandler = cluster.NewGetHealthHandler(db)
 	api.ClusterGetClustersIDQueryPerformanceHandler = cluster.NewGetQueryPerformanceHandler(db)
 	api.ClusterGetClustersIDQueryPerformanceFingerprintIDHandler = cluster.NewGetQueryPerformanceDetailHandler(db)

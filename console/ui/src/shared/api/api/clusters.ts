@@ -45,6 +45,17 @@ const injectedRtkApi = api.injectEndpoints({
       }),
       invalidatesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
     }),
+    putClustersByIdAutomationCredentials: build.mutation<
+      PutClustersByIdAutomationCredentialsApiResponse,
+      PutClustersByIdAutomationCredentialsApiArg
+    >({
+      query: (queryArg) => ({
+        url: `/clusters/${queryArg.id}/automation-credentials`,
+        method: 'PUT',
+        body: queryArg.requestClusterAutomationCredentials,
+      }),
+      invalidatesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
+    }),
     getClustersByIdHealth: build.query<GetClustersByIdHealthApiResponse, GetClustersByIdHealthApiArg>({
       query: (queryArg) => ({ url: `/clusters/${queryArg.id}/health` }),
       providesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
@@ -195,6 +206,11 @@ export type PutClustersByIdCredentialApiResponse = /** status 200 OK */ ClusterI
 export type PutClustersByIdCredentialApiArg = {
   id: number;
   requestClusterCredential: RequestClusterCredential;
+};
+export type PutClustersByIdAutomationCredentialsApiResponse = /** status 200 OK */ ClusterInfo;
+export type PutClustersByIdAutomationCredentialsApiArg = {
+  id: number;
+  requestClusterAutomationCredentials: RequestClusterAutomationCredentials;
 };
 export type GetClustersByIdHealthApiResponse = ResponseClusterHealth;
 export type GetClustersByIdHealthApiArg = {
@@ -527,6 +543,12 @@ export type ClusterInfo = {
   project_name?: string;
   connection_info?: object;
   secret_id?: number | null;
+  automation_credentials?: ClusterInfoAutomationCredentials;
+};
+export type ClusterInfoAutomationCredentials = {
+  postgres_superuser_secret_id?: number | null;
+  postgres_replication_secret_id?: number | null;
+  patroni_restapi_secret_id?: number | null;
 };
 export type PaginationInfoForListRequests = {
   offset?: number | null;
@@ -549,6 +571,11 @@ export type RequestClusterRemove = object;
 export type RequestClusterCredential = {
   secret_id: number;
 };
+export type RequestClusterAutomationCredentials = {
+  postgres_superuser_secret_id?: number | null;
+  postgres_replication_secret_id?: number | null;
+  patroni_restapi_secret_id?: number | null;
+};
 export const {
   usePostClustersMutation,
   useGetClustersQuery,
@@ -558,6 +585,7 @@ export const {
   useGetClustersByIdQuery,
   useLazyGetClustersByIdQuery,
   usePutClustersByIdCredentialMutation,
+  usePutClustersByIdAutomationCredentialsMutation,
   useGetClustersByIdHealthQuery,
   useLazyGetClustersByIdHealthQuery,
   useGetClustersByIdQueryPerformanceQuery,

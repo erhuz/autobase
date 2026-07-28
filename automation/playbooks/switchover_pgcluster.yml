@@ -15,6 +15,11 @@
       ansible.builtin.import_role:
         name: vitabaks.autobase.common
 
+    - name: Authenticate operation credentials
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.pre_checks
+        tasks_from: operation_credentials
+
     - name: Detect current Patroni leader
       ansible.builtin.uri:
         url: >-

@@ -166,25 +166,28 @@ type GetExtensionsReq struct {
 }
 
 type Cluster struct {
-	ID                    int64
-	ProjectID             int64
-	EnvironmentID         int64
-	SecretID              *int64
-	Name                  string
-	Status                string
-	Description           string
-	Location              *string
-	ConnectionInfo        interface{}
-	ExtraVars             []byte
-	Inventory             []byte
-	ServersCount          int32
-	PostgreVersion        int32
-	CreatedAt             time.Time
-	UpdatedAt             *time.Time
-	DeletedAt             *time.Time
-	Flags                 uint32
-	QueryAnalyticsManaged bool
-	QueryAnalyticsDesired bool
+	ID                          int64
+	ProjectID                   int64
+	EnvironmentID               int64
+	SecretID                    *int64
+	Name                        string
+	Status                      string
+	Description                 string
+	Location                    *string
+	ConnectionInfo              interface{}
+	ExtraVars                   []byte
+	Inventory                   []byte
+	ServersCount                int32
+	PostgreVersion              int32
+	CreatedAt                   time.Time
+	UpdatedAt                   *time.Time
+	DeletedAt                   *time.Time
+	Flags                       uint32
+	QueryAnalyticsManaged       bool
+	QueryAnalyticsDesired       bool
+	PostgresSuperuserSecretID   *int64
+	PostgresReplicationSecretID *int64
+	PatroniRestapiSecretID      *int64
 }
 
 type GetClustersReq struct {
@@ -225,6 +228,12 @@ type UpdateClusterReq struct {
 	Status         *string
 	Flags          *uint32
 	SecretID       *int64
+}
+
+type AutomationCredentials struct {
+	PostgresSuperuserSecretID   *int64
+	PostgresReplicationSecretID *int64
+	PatroniRestapiSecretID      *int64
 }
 
 type Operation struct {

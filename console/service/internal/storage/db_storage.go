@@ -506,6 +506,25 @@ func (s *dbStorage) UpdateCluster(ctx context.Context, req *UpdateClusterReq) (*
 	return cluster, nil
 }
 
+func (s *dbStorage) SetClusterAutomationCredentials(
+	ctx context.Context,
+	clusterID int64,
+	credentials AutomationCredentials,
+) (*Cluster, error) {
+	return QueryRowToStruct[Cluster](ctx, s.db, `
+		update clusters
+		set postgres_superuser_secret_id = $1,
+		    postgres_replication_secret_id = $2,
+		    patroni_restapi_secret_id = $3
+		where cluster_id = $4
+		returning *`,
+		credentials.PostgresSuperuserSecretID,
+		credentials.PostgresReplicationSecretID,
+		credentials.PatroniRestapiSecretID,
+		clusterID,
+	)
+}
+
 func (s *dbStorage) GetDefaultClusterName(ctx context.Context) (string, error) {
 	name, err := QueryRowToScalar[string](ctx, s.db, "select * from get_cluster_name()")
 	if err != nil {
@@ -692,6 +711,9 @@ func (s *dbStorage) DeleteClusterSoft(ctx context.Context, id int64) error {
 	  set
 		deleted_at = current_timestamp,
 		secret_id = null,
+		postgres_superuser_secret_id = null,
+		postgres_replication_secret_id = null,
+		patroni_restapi_secret_id = null,
 		cluster_name = cluster_name || '_deleted_' || to_char(current_timestamp, 'yyyymmddhh24miss')
 	  where
 		cluster_id = $1

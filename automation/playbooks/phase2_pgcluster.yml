@@ -56,6 +56,9 @@
       when: phase2_pgbackrest_enabled | bool
       changed_when: false
 
+- name: vitabaks.autobase.phase2_pgcluster | Authenticate before mutation
+  ansible.builtin.import_playbook: operation_credentials.yml
+
 - name: vitabaks.autobase.phase2_pgcluster | Rolling package update
   ansible.builtin.import_playbook: update_pgcluster.yml
   when: phase2_operation == 'rolling_update'

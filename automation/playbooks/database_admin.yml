@@ -68,6 +68,9 @@
         groups: database_admin_before
       changed_when: false
 
+- name: vitabaks.autobase.database_admin | Authenticate before mutation
+  ansible.builtin.import_playbook: operation_credentials.yml
+
 - name: vitabaks.autobase.database_admin | Capture current catalog state
   hosts: database_admin_before
   gather_facts: true

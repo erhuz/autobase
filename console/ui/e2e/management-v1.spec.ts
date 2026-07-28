@@ -4,6 +4,7 @@ const token = 'management-v1-token';
 
 test('management v1 shows recoverability, guards analytics, and preserves audit evidence', async ({ page }) => {
   let operationRequest: unknown;
+  let automationCredentialRequest: unknown;
   let queryPerformanceRequests = 0;
 
   await page.addInitScript((value) => localStorage.setItem('token', value), token);
@@ -117,6 +118,10 @@ test('management v1 shows recoverability, guards analytics, and preserves audit 
       operationRequest = request.postDataJSON();
       return route.fulfill({ json: { operation_id: 17, status: 'running' } });
     }
+    if (path === '/clusters/5/automation-credentials' && request.method() === 'PUT') {
+      automationCredentialRequest = request.postDataJSON();
+      return route.fulfill({ json: { id: 5, automation_credentials: automationCredentialRequest } });
+    }
     if (path === '/operations/17/log') {
       return route.fulfill({
         body: 'task output without credentials',
@@ -145,7 +150,12 @@ test('management v1 shows recoverability, guards analytics, and preserves audit 
     if (path === '/secrets') {
       return route.fulfill({
         json: {
-          data: [{ id: 7, name: 'fixture-operator-key', type: 'ssh_key' }],
+          data: [
+            { id: 7, name: 'fixture-operator-key', type: 'ssh_key' },
+            { id: 11, name: 'postgres-superuser', type: 'password' },
+            { id: 12, name: 'postgres-replication', type: 'password' },
+            { id: 13, name: 'patroni-restapi', type: 'password' },
+          ],
         },
       });
     }
@@ -181,6 +191,20 @@ test('management v1 shows recoverability, guards analytics, and preserves audit 
   await expect(page.getByRole('heading', { name: 'Management access' })).toBeVisible();
   await page.getByRole('button', { name: 'Show password' }).click();
   await expect(page.getByText('fixture-password')).toBeVisible();
+  for (const [label, option] of [
+    ['PostgreSQL superuser', 'postgres-superuser'],
+    ['PostgreSQL replication', 'postgres-replication'],
+    ['Patroni REST API', 'patroni-restapi'],
+  ]) {
+    await page.getByLabel(label).click();
+    await page.getByRole('option', { name: option }).click();
+  }
+  await page.getByRole('button', { name: 'Save automation credentials' }).click();
+  expect(automationCredentialRequest).toEqual({
+    postgres_superuser_secret_id: 11,
+    postgres_replication_secret_id: 12,
+    patroni_restapi_secret_id: 13,
+  });
 
   await page.goto('/operations/17/log');
   await expect(page.getByText('Operation #17')).toBeVisible();

@@ -51,11 +51,15 @@ func recoveryFixture() (*recoveryOperationStorage, time.Time) {
 	store, _ := backupFixture()
 	now := time.Now().UTC().Truncate(time.Second)
 	credentialID := int64(7)
+	superuserID, replicationID, restapiID := int64(8), int64(9), int64(10)
 	walContinuous := true
 	store.cluster = &storage.Cluster{
 		ID: 5, ProjectID: 3, Name: "recovery-cluster",
-		SecretID:  &credentialID,
-		ExtraVars: []byte(`{"pgbackrest_install":true,"recovery_target":true}`),
+		SecretID:                    &credentialID,
+		PostgresSuperuserSecretID:   &superuserID,
+		PostgresReplicationSecretID: &replicationID,
+		PatroniRestapiSecretID:      &restapiID,
+		ExtraVars:                   []byte(`{"pgbackrest_install":true,"recovery_target":true}`),
 		Inventory: []byte(`{
 			"all":{"children":{
 				"master":{"hosts":{"10.1.0.1":{"hostname":"recovery-1"}}},

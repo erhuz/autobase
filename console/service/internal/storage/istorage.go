@@ -51,6 +51,7 @@ type IStorage interface {
 	DeleteServer(ctx context.Context, id int64) error
 	GetClusterByName(ctx context.Context, name string) (*Cluster, error)
 	UpdateCluster(ctx context.Context, req *UpdateClusterReq) (*Cluster, error)
+	SetClusterAutomationCredentials(ctx context.Context, clusterID int64, credentials AutomationCredentials) (*Cluster, error)
 
 	// operation
 	CreateOperation(ctx context.Context, req *CreateOperationReq) (*Operation, error)

@@ -23,6 +23,7 @@ C12: v1 excludes SQL editor, billing/subscriptions/support plans, full cloud-pro
 C13: future release compatibility declared/tested as one `{ui,api,console_db,automation}` version set.
 C14: migrations forward + ordered; Console persistent volume reset ⊥.
 C15: implementation extends existing Swagger, Go service/storage/watchers, React routes, Goose migrations, Automation playbooks/roles.
+C16: automation service credentials = separate-purpose + cluster-bound + attach-only; per-operation override + live PostgreSQL/Patroni password rotation ⊥.
 
 ## §I
 
@@ -30,18 +31,22 @@ doc: `MANAGEMENT_VISION.md` → product authority for scope, phases, safety, suc
 ui.health: `/clusters/:clusterId/overview` → triage-first availability/recoverability + topology + DCS + routing + backup + operation summary + guarded action entry.
 ui.ops: `/operations` + `/operations/:operationId/log` → queue/state/filter/detail/log/failure/verification.
 ui.query: `/clusters/:clusterId/query-performance` → state/coverage/filter/KPI/trend/top-query/detail/enable/disable.
-ui.access: `/clusters/:clusterId/access` → connection values + management credential attach/manage.
+ui.access: `/clusters/:clusterId/access` → connection values + management credential + 3 automation credential bindings.
+ui.secrets: Settings → encrypted password secret create; password input masked; values ⊥ read.
 api.health: `GET /clusters/{id}/health` → `{observed_at,topology,dcs,routing,backup,operation,recoverability}`.
 api.query: `GET /clusters/{id}/query-performance` + `GET /clusters/{id}/query-performance/{fingerprintId}` → `{status,coverage,summary,series,queries|fingerprint,filters?,histogram?}`.
 api.preflight: `POST /clusters/{id}/preflights` `{type,target?,params?}` → `{id,observed,desired,checks,blockers,plan,affected_nodes,confirmation}`.
 api.run: `POST /clusters/{id}/operations` `{preflight_id,confirmation}` → `{operation_id,status}`.
 api.credential: `PUT /clusters/{id}/credential` `{secret_id}` → `ClusterInfo`; secret value ⊥ response.
+api.automation_credentials: `PUT /clusters/{id}/automation-credentials` `{postgres_superuser_secret_id:int|null,postgres_replication_secret_id:int|null,patroni_restapi_secret_id:int|null}` → `ClusterInfo`; full atomic replace; values ⊥ response.
 api.ops: `GET /operations` + `GET /operations/{id}` + `GET /operations/{id}/log` → durable operation/audit state.
 op.v1: `type ∈ {switchover,reload,rolling_restart,replica_reinit,backup_full,backup_diff,query_analytics_enable,query_analytics_disable}`.
+op.credentials: `query_analytics_enable|query_analytics_disable` → superuser+REST; `node_add|config_update|postgresql_upgrade|restore|pitr` → superuser+replication+REST; `backup_full|backup_diff` → ∅; remaining guarded ops → superuser; undeclared op → block.
 op.state: `queued → running → succeeded|failed|cancelled`.
 db: `console/db/migrations` → preserve existing data; extend operation/preflight/audit/backup-evidence persistence.
 db.query: Console DB → analytics source + fingerprint + complete bucket + retained sample + 7d retention.
 automation: API runner → existing inventory + supported Autobase playbooks/roles + Patroni/pgBackRest operations.
+automation.credentials: cluster bindings → launch-only `patroni_superuser_*|patroni_replication_*|patroni_restapi_*`; persisted operation/preflight/audit/log values ⊥.
 automation.query: signed package + secure PGSM config + scoped read-only role + serial HA rollout.
 authority: Patroni/DCS → live topology; routing target checks → traffic state; pgBackRest → backup/WAL/lock state.
 release: stock `2.9.0` DB/config fixture → migrate → verify data + secrets metadata + zero managed-cluster mutation.
@@ -109,6 +114,7 @@ V55: release built from tagged source commit; workflow source edits/commits ⊥;
 V56: cluster detail → route-backed `{overview,query-performance,access}`; overview keeps availability ≠ recoverability + health/node triage; tab-only data loads active route; controls keyboard-native.
 V57: viewport ≤600px → sidebar width = 60px + cluster tabs/content reachable; horizontal content clipping ⊥.
 V58: query analytics enable|disable preserves effective preload + HBA when Patroni DCS omits either; collector rules scoped + reversible.
+V59: ∀ guarded op → credential-purpose set declared; required same-project password secrets attached + decryptable @ preflight, IDs+`updated_at` bound, values launch-only; running target auth probed before first mutation; isolated bootstrap validates before mutation + probes every target after service start; failure → next mutation/verification ⊥.
 
 ## §T
 
@@ -144,6 +150,8 @@ T28|x|cut reproducible `2.9.0-management.1` release manifest + official DB reten
 T29|x|redesign cluster detail into triage-first tabs + route-scoped data|V11,V16,V17,V26,V43,V48,V56,V57,I.ui.health,I.ui.query,I.ui.access,I.api.health,I.api.query,I.api.credential,I.verify
 T30|x|cut reproducible `2.9.0-management.2` release + direct `2.9.0` upgrade gate|V11,V12,V14,V15,V46,V47,V52,V55,I.image,I.release,I.release.manifest,I.verify
 T31|x|cut `2.9.0-management.3` PGSM imported-cluster hotfix release|V11,V12,V14,V15,V46,V47,V52,V55,V58,I.image,I.release,I.release.manifest,I.verify
+T32|x|bind 3 cluster automation password secrets + Access UI + purpose map + pre-mutation auth probes + half-applied-op recovery runbook|V4,V12,V13,V19,V22,V32,V44,V54,V59,I.ui.access,I.ui.secrets,I.api.automation_credentials,I.op.credentials,I.automation.credentials,I.verify
+T33|.|cut reproducible `2.9.0-management.4` credential-safety release|V11,V12,V14,V15,V46,V47,V52,V55,V59,I.image,I.release,I.release.manifest,I.verify
 
 ## §B
 
@@ -227,3 +235,6 @@ B76|2026-07-27|restricted sandbox denied corrected Vite localhost bind until ele
 B77|2026-07-27|new node-state chip repeated ES2021 `replaceAll` under ES2020 compiler target|V56
 B78|2026-07-27|copy button disabled empty values visually but passed optional value to clipboard hook|V56
 B79|2026-07-27|query analytics required DCS `pg_hba`; Autobase/imported clusters keep effective rules in local `pg_hba.conf`|V58
+B80|2026-07-28|maintenance trusted stale Patroni superuser config; Query Analytics changed cluster before TCP auth probe|V59
+B81|2026-07-28|T32 focused gates retained pre-credential payload + implicit UI/YAML runner assumptions|V47,V59
+B82|2026-07-28|isolated restore target may have no service to authenticate before destructive bootstrap|V59

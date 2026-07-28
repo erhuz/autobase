@@ -16,10 +16,11 @@ import (
 func databaseAdminFixture() (*guardedOperationStorage, *guardedOperationsHandler) {
 	now := time.Now().UTC()
 	credentialID := int64(7)
+	superuserID := int64(8)
 	store := &guardedOperationStorage{
 		cluster: &storage.Cluster{
 			ID: 5, ProjectID: 3, Name: "cluster-1", PostgreVersion: 16,
-			SecretID: &credentialID,
+			SecretID: &credentialID, PostgresSuperuserSecretID: &superuserID,
 			Inventory: []byte(`{
 				"all":{"children":{
 					"master":{"hosts":{"postgresql-1":{"hostname":"postgresql-1"}}},
@@ -101,7 +102,7 @@ func TestDatabaseAdminUsesFixedNativeInputs(t *testing.T) {
 			if json.Unmarshal(payload, &inputs) != nil || playbook != databaseAdminPlaybook ||
 				!containsString(envs, "ANSIBLE_RUN_TAGS="+test.tag+",database_admin") ||
 				inputs["database_admin_primary"] != "postgresql-1" ||
-				inputs["cloud_provider"] != "" || strings.Contains(string(payload), "password") {
+				inputs["cloud_provider"] != "" || strings.Contains(string(payload), "database_admin_password") {
 				t.Fatalf("envs=%v playbook=%q inputs=%v", envs, playbook, inputs)
 			}
 			items, ok := inputs[test.list].([]any)

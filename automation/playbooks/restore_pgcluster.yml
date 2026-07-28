@@ -34,8 +34,35 @@
         groups: recovery_verifier
       changed_when: false
 
+- name: vitabaks.autobase.restore_pgcluster | Validate credentials before bootstrap
+  ansible.builtin.import_playbook: operation_credentials.yml
+
 - name: vitabaks.autobase.restore_pgcluster | Run native point-in-time recovery
   ansible.builtin.import_playbook: deploy_pgcluster.yml
+
+- name: vitabaks.autobase.restore_pgcluster | Authenticate restored services
+  hosts: postgres_cluster
+  gather_facts: true
+  become: true
+  become_method: sudo
+  any_errors_fatal: true
+  tasks:
+    - name: Enable post-bootstrap authentication probes
+      ansible.builtin.set_fact:
+        operation_credentials_validate_only: false
+
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
+    - name: Define bind address
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.bind_address
+
+    - name: Authenticate restored operation credentials
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.pre_checks
+        tasks_from: operation_credentials
 
 - name: vitabaks.autobase.restore_pgcluster | Verify isolated recovery
   hosts: recovery_verifier

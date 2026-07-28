@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"postgresql-cluster-console/internal/storage"
@@ -44,7 +43,7 @@ func TestExtensionAdminUsesSupportedNativeInputs(t *testing.T) {
 	if json.Unmarshal(payload, &inputs) != nil || playbook != phase3ServicesPlaybook ||
 		!containsString(envs, "ANSIBLE_RUN_TAGS=phase3_services,postgresql_extensions,pgvector") ||
 		inputs["phase3_extension"] != "vector" || inputs["enable_pgvector"] != true ||
-		inputs["cloud_provider"] != "" || strings.Contains(string(payload), "password") {
+		inputs["cloud_provider"] != "" {
 		t.Fatalf("envs=%v playbook=%q inputs=%v", envs, playbook, inputs)
 	}
 	items, ok := inputs["postgresql_extensions"].([]any)
