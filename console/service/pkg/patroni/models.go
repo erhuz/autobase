@@ -4,6 +4,7 @@ type MonitoringInfo struct {
 	State         string `json:"state"`
 	Role          string `json:"role"`
 	ServerVersion int    `json:"server_version"`
+	DCSLastSeen   int64  `json:"dcs_last_seen"`
 }
 
 type ClusterInfo struct {

@@ -23,6 +23,7 @@ func switchoverFixture() (*guardedOperationStorage, string) {
 	superuserID, replicationID, restapiID := int64(8), int64(9), int64(10)
 	leaderLag, candidateLag, replicaLag := int64(0), int64(10), int64(2)
 	flags := storage.SetPatroniConnectStatus(0, 1)
+	dcsTags := storage.WithDCSLastSeen(nil, now)
 	store := &guardedOperationStorage{
 		cluster: &storage.Cluster{
 			ID: 5, ProjectID: 3, Name: "cluster-1", Status: storage.ClusterStatusHealthy, Flags: *flags,
@@ -38,9 +39,9 @@ func switchoverFixture() (*guardedOperationStorage, string) {
 			},
 		},
 		servers: []storage.Server{
-			{Name: "postgresql-2", Role: "replica", Status: "streaming", Lag: &candidateLag, UpdatedAt: &now},
-			{Name: "postgresql-1", Role: "leader", Status: "running", Lag: &leaderLag, UpdatedAt: &now},
-			{Name: "postgresql-3", Role: "replica", Status: "streaming", Lag: &replicaLag, UpdatedAt: &now},
+			{Name: "postgresql-2", Role: "replica", Status: "streaming", Lag: &candidateLag, Tags: dcsTags, UpdatedAt: &now},
+			{Name: "postgresql-1", Role: "leader", Status: "running", Lag: &leaderLag, Tags: dcsTags, UpdatedAt: &now},
+			{Name: "postgresql-3", Role: "replica", Status: "streaming", Lag: &replicaLag, Tags: dcsTags, UpdatedAt: &now},
 		},
 		consumeOK: true,
 	}
@@ -89,6 +90,16 @@ func TestSwitchoverPreflightBlocksCandidateOverLagPolicy(t *testing.T) {
 	handler := NewGuardedOperationsHandler(store, nil, nil, blockedPreflightWatcher{}, &configuration.Config{}, zerolog.Nop())
 	switchoverPreflight(t, handler, store, target)
 	if !strings.Contains(string(store.preflight.Blockers), "candidate lag within policy") {
+		t.Fatalf("blockers=%s", store.preflight.Blockers)
+	}
+}
+
+func TestV60SwitchoverPreflightBlocksMissingDCSObservation(t *testing.T) {
+	store, target := switchoverFixture()
+	store.servers[0].Tags = nil
+	handler := NewGuardedOperationsHandler(store, nil, nil, blockedPreflightWatcher{}, &configuration.Config{}, zerolog.Nop())
+	switchoverPreflight(t, handler, store, target)
+	if !strings.Contains(string(store.preflight.Blockers), "DCS configured and Patroni reachable") {
 		t.Fatalf("blockers=%s", store.preflight.Blockers)
 	}
 }

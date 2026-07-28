@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"postgresql-cluster-console/internal/configuration"
 	"postgresql-cluster-console/internal/controllers"
 	"postgresql-cluster-console/internal/storage"
 	"postgresql-cluster-console/models"
@@ -17,10 +18,13 @@ import (
 	"github.com/go-openapi/strfmt"
 )
 
-type getHealthHandler struct{ db storage.IStorage }
+type getHealthHandler struct {
+	db          storage.IStorage
+	dcsFreshFor time.Duration
+}
 
-func NewGetHealthHandler(db storage.IStorage) clusterapi.GetClustersIDHealthHandler {
-	return &getHealthHandler{db: db}
+func NewGetHealthHandler(db storage.IStorage, cfg *configuration.Config) clusterapi.GetClustersIDHealthHandler {
+	return &getHealthHandler{db: db, dcsFreshFor: dcsFreshness(cfg)}
 }
 
 func (h *getHealthHandler) Handle(param clusterapi.GetClustersIDHealthParams) middleware.Responder {
@@ -41,16 +45,15 @@ func (h *getHealthHandler) Handle(param clusterapi.GetClustersIDHealthParams) mi
 	if err != nil {
 		return clusterapi.NewGetClustersIDHealthBadRequest().WithPayload(controllers.MakeErrorPayload(err, controllers.BaseError))
 	}
-	return clusterapi.NewGetClustersIDHealthOK().WithPayload(clusterHealthModel(cluster, servers, operations, backup, time.Now().UTC()))
+	return clusterapi.NewGetClustersIDHealthOK().WithPayload(clusterHealthModel(cluster, servers, operations, backup, time.Now().UTC(), h.dcsFreshFor))
 }
 
-func clusterHealthModel(cluster *storage.Cluster, servers []storage.Server, operations []storage.ClusterHealthOperation, backupEvidence *storage.BackupEvidence, now time.Time) *models.ResponseClusterHealth {
+func clusterHealthModel(cluster *storage.Cluster, servers []storage.Server, operations []storage.ClusterHealthOperation, backupEvidence *storage.BackupEvidence, now time.Time, dcsFreshFor time.Duration) *models.ResponseClusterHealth {
 	observedAt := strfmt.DateTime(now)
-	dcs := healthDCS(cluster.ExtraVars, cluster.Inventory)
+	dcs := observedDCS(cluster.ExtraVars, cluster.Inventory, servers, now, dcsFreshFor)
 	routing := healthRouting(cluster.ConnectionInfo)
 	backup, recoverability := healthBackup(backupEvidence, now)
 
-	// ponytail: live DCS/routing evidence belongs to T5; unknown beats inferred health.
 	return &models.ResponseClusterHealth{
 		ObservedAt:     &observedAt,
 		Topology:       healthTopology(cluster, servers),
@@ -231,11 +234,44 @@ func healthDCS(extraVars, inventory []byte) *models.HealthDCS {
 		members = append(members, name)
 	}
 	sort.Strings(members)
-	state := "not_observed"
-	if len(members) > 0 {
-		state = "configured_not_observed"
+	return &models.HealthDCS{State: "not_observed", Type: dcsType, Members: members}
+}
+
+func observedDCS(extraVars, inventory []byte, servers []storage.Server, now time.Time, freshFor time.Duration) *models.HealthDCS {
+	dcs := healthDCS(extraVars, inventory)
+	healthy, observed, fresh := 0, 0, 0
+	for _, server := range servers {
+		if !healthyStatus(strings.ToLower(server.Status)) {
+			continue
+		}
+		healthy++
+		lastSeen, ok := storage.ServerDCSLastSeen(server.Tags)
+		if !ok {
+			continue
+		}
+		observed++
+		age := now.Sub(lastSeen)
+		if age >= 0 && age <= freshFor {
+			fresh++
+		}
 	}
-	return &models.HealthDCS{State: state, Type: dcsType, Members: members}
+	if healthy == 0 || observed == 0 {
+		return dcs
+	}
+	reachable := observed == healthy && fresh == healthy
+	dcs.Reachable = &reachable
+	dcs.State = "degraded"
+	if reachable {
+		dcs.State = "healthy"
+	}
+	return dcs
+}
+
+func dcsFreshness(cfg *configuration.Config) time.Duration {
+	if cfg != nil && cfg.ClusterWatcher.RunEvery > 0 {
+		return 2 * cfg.ClusterWatcher.RunEvery
+	}
+	return 2 * time.Minute
 }
 
 func healthRouting(raw any) *models.HealthRouting {

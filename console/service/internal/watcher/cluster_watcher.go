@@ -230,6 +230,15 @@ func (sw *clusterWatcher) handleClusterServers(ctx context.Context, cl *storage.
 			default:
 				localLog.Trace().Type("lag_type", l).Msg("unknown lag type")
 			}
+			lastSeen := time.Time{}
+			if serverInfo.State == stateRunning || serverInfo.State == stateStreaming {
+				monitoringInfo, monitoringErr := sw.patroniCli.GetMonitoringInfo(ctx, serverInfo.Host)
+				if monitoringErr != nil {
+					localLog.Debug().Err(monitoringErr).Str("server", serverInfo.Name).Msg("failed to get Patroni DCS evidence")
+				} else if monitoringInfo.DCSLastSeen > 0 {
+					lastSeen = time.Unix(monitoringInfo.DCSLastSeen, 0)
+				}
+			}
 			updatedServer, err := sw.db.UpdateServer(ctx, &storage.UpdateServerReq{
 				ClusterID:      cl.ID,
 				IpAddress:      serverInfo.Host,
@@ -238,7 +247,7 @@ func (sw *clusterWatcher) handleClusterServers(ctx context.Context, cl *storage.
 				Status:         &serverInfo.State,
 				Timeline:       &serverInfo.Timeline,
 				Lag:            lag,
-				Tags:           &serverInfo.Tags,
+				Tags:           storage.WithDCSLastSeen(serverInfo.Tags, lastSeen),
 				PendingRestart: &serverInfo.PendingRestart,
 			})
 			if err != nil {

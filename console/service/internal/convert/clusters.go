@@ -53,7 +53,7 @@ func ClusterToSwagger(cl *storage.Cluster, servers []storage.Server, environment
 			PendingRestart: server.PendingRestart,
 			Role:           server.Role,
 			Status:         server.Status,
-			Tags:           server.Tags,
+			Tags:           storage.VisibleServerTags(server.Tags),
 			Timeline:       server.Timeline,
 		})
 	}

@@ -16,7 +16,7 @@ vi.mock('@shared/api/api/clusters.ts', () => ({
         leader: { name: 'postgresql-1', role: 'leader', state: 'running', timeline: 7, lag: 0 },
         replicas: [{ name: 'postgresql-2', role: 'replica', state: 'streaming', timeline: 7, lag: 0 }],
       },
-      dcs: { state: 'configured_not_observed', type: 'etcd', reachable: null, members: ['dcs-1', 'dcs-2'] },
+      dcs: { state: 'healthy', type: 'etcd', reachable: true, members: ['dcs-1', 'dcs-2'] },
       routing: {
         state: 'configured_not_observed',
         targets: [{ role: 'primary', address: 'primary.internal', port: 5000, reachable: null, role_matches: null }],
@@ -56,6 +56,7 @@ describe('cluster health UI', () => {
     expect(screen.getByText(/postgresql-1 · leader · running/)).toBeInTheDocument();
     expect(screen.getByText('Members')).toBeInTheDocument();
     expect(screen.getByText('dcs-1, dcs-2')).toBeInTheDocument();
+    expect(screen.getByText(/etcd · reachable: yes/i)).toBeInTheDocument();
     expect(screen.getAllByText('not observed').length).toBeGreaterThan(0);
     expect(screen.getByText('backup not observed')).toBeInTheDocument();
     expect(screen.getByText('Retention')).toBeInTheDocument();

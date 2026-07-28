@@ -67,9 +67,8 @@ func (h *guardedOperationsHandler) switchoverPreflightState(ctx context.Context,
 	maxLag, validLagPolicy := switchoverLagPolicy(clusterInfo.ExtraVars)
 	candidateHealthy := candidateFound && !leaderRole(candidate.Role) && healthyStatus(candidate.Status)
 	candidateLagOK := candidateHealthy && candidateLag != nil && *candidateLag >= 0 && *candidateLag <= maxLag
-	dcs := healthDCS(clusterInfo.ExtraVars, clusterInfo.Inventory)
-	dcsReady := len(dcs.Members) > 0 &&
-		storage.GetPatroniConnectStatus(clusterInfo.Flags) == 1 &&
+	dcs := observedDCS(clusterInfo.ExtraVars, clusterInfo.Inventory, servers, time.Now().UTC(), dcsFreshness(h.cfg))
+	dcsReady := len(dcs.Members) > 0 && dcs.Reachable != nil && *dcs.Reachable &&
 		clusterInfo.Status == storage.ClusterStatusHealthy
 	routing := primaryRoutingTargets(clusterInfo.ConnectionInfo)
 
@@ -108,6 +107,7 @@ func (h *guardedOperationsHandler) switchoverPreflightState(ctx context.Context,
 			"type": dcs.Type, "members": dcs.Members,
 			"configured":        len(dcs.Members) > 0,
 			"patroni_reachable": storage.GetPatroniConnectStatus(clusterInfo.Flags) == 1,
+			"reachable":         dcs.Reachable,
 		},
 		"routing": routing,
 	}
