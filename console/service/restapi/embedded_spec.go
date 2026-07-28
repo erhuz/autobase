@@ -28,7 +28,7 @@ func init() {
   "info": {
     "description": "API for autobase console",
     "title": "autobase console",
-    "version": "2.9.0-management.3"
+    "version": "2.9.0-management.4"
   },
   "host": "localhost:8080",
   "basePath": "/api/v1",
@@ -3601,7 +3601,7 @@ func init() {
   "info": {
     "description": "API for autobase console",
     "title": "autobase console",
-    "version": "2.9.0-management.3"
+    "version": "2.9.0-management.4"
   },
   "host": "localhost:8080",
   "basePath": "/api/v1",

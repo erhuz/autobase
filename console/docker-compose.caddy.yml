@@ -21,7 +21,7 @@ services:
       caddy.email: ${EMAIL}
 
   autobase-console-api:
-    image: ghcr.io/erhuz/console_api:2.9.0-management.3
+    image: ghcr.io/erhuz/console_api:2.9.0-management.4
     container_name: autobase-console-api
     healthcheck:
       test: ["CMD", "curl", "-fsS",
@@ -47,7 +47,7 @@ services:
       - caddy
 
   autobase-console-ui:
-    image: ghcr.io/erhuz/console_ui:2.9.0-management.3
+    image: ghcr.io/erhuz/console_ui:2.9.0-management.4
     container_name: autobase-console-ui
     healthcheck:
       test: [ "CMD", "curl", "http://localhost:80/" ]
