@@ -175,7 +175,7 @@ T41|x|detect/bind/recheck live Patroni scope; gate CLI topology before first mut
 T42|x|strip Console scope extra-var; enforce live-scope precedence + diagnostics; regress|V5,V22,V23,V29,V37,V45,V68,I.automation,I.authority,I.verify
 T43|x|prepare immutable `2.9.0-management.9` live-scope precedence hotfix release set|V11,V12,V14,V15,V46,V47,V52,V55,V68,I.image,I.release,I.release.manifest,I.verify
 T44|x|fix Query Analytics CA-scoped fail-closed leader probes + PGSM release/schema split|V35,V36,V37,V40,V41,V45,V58,V59,V69,I.automation.query,I.verify
-T45|.|prepare immutable `2.9.0-management.10` Query Analytics hotfix release set|V11,V12,V14,V15,V46,V47,V52,V55,V69,I.image,I.release,I.release.manifest,I.verify
+T45|x|prepare immutable `2.9.0-management.10` Query Analytics hotfix release set|V11,V12,V14,V15,V46,V47,V52,V55,V69,I.image,I.release,I.release.manifest,I.verify
 
 ## §B
 
