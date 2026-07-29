@@ -39,7 +39,7 @@ func TestManagementVersionSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	if set.Schema != 1 || set.Name != "management-v1" || set.SourceBaseline != "2.9.0" ||
-		set.ReleaseVersion != "2.9.0-management.5" || set.Platform != "linux/amd64" ||
+		set.ReleaseVersion != "2.9.0-management.6" || set.Platform != "linux/amd64" ||
 		set.ImageRegistry != "ghcr.io/erhuz" {
 		t.Fatalf("unexpected version set metadata: %+v", set)
 	}
@@ -106,13 +106,13 @@ func TestImageRegistryContract(t *testing.T) {
 		{".config/make/docker.mak", []string{"DOCKER_REGISTRY ?= ghcr.io/erhuz", "DOCKER_PLATFORMS ?= linux/amd64", "docker-push-management", "docker login ghcr.io"}, []string{"Dockerhub"}},
 		{".github/workflows/docker.yml", []string{"packages: write", "make docker-push-management", "DOCKER_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}"}, []string{"make docker-push\n", "secrets.DOCKER_PASSWORD"}},
 		{".github/workflows/release.yml", []string{"2.9.0-management.*", "git diff --exit-code", "make docker-push-management", "release-manifest.json", "docker logout ghcr.io", "gh release create"}, []string{"sed -i", "git commit", "git push", "ansible-galaxy collection publish", "docker-push-console-db"}},
-		{"console/docker-compose.yml", []string{"ghcr.io/erhuz/console_api:2.9.0-management.5", "ghcr.io/erhuz/console_ui:2.9.0-management.5", "autobase/console_db:2.9.0"}, []string{"ghcr.io/erhuz/console_db:"}},
-		{"console/docker-compose.caddy.yml", []string{"ghcr.io/erhuz/console_api:2.9.0-management.5", "ghcr.io/erhuz/console_ui:2.9.0-management.5", "autobase/console_db:2.9.0"}, []string{"ghcr.io/erhuz/console_db:"}},
+		{"console/docker-compose.yml", []string{"ghcr.io/erhuz/console_api:2.9.0-management.6", "ghcr.io/erhuz/console_ui:2.9.0-management.6", "autobase/console_db:2.9.0"}, []string{"ghcr.io/erhuz/console_db:"}},
+		{"console/docker-compose.caddy.yml", []string{"ghcr.io/erhuz/console_api:2.9.0-management.6", "ghcr.io/erhuz/console_ui:2.9.0-management.6", "autobase/console_db:2.9.0"}, []string{"ghcr.io/erhuz/console_db:"}},
 		{"console/docker-compose.enterprise.yml", []string{"autobase/console_db:2.9.0"}, []string{"ghcr.io/erhuz/console_db:"}},
 		{"console/docker-compose.enterprise.ssl.yml", []string{"autobase/console_db:2.9.0"}, []string{"ghcr.io/erhuz/console_db:"}},
 		{"console/README.md", []string{"### Docker Compose"}, []string{"ghcr.io/erhuz/console:"}},
-		{"console/service/README.md", []string{"ghcr.io/erhuz/automation:2.9.0-management.5"}, []string{"ghcr.io/erhuz/automation:latest"}},
-		{"console/service/internal/configuration/config.go", []string{"ghcr.io/erhuz/automation:2.9.0-management.5"}, []string{"ghcr.io/erhuz/automation:latest"}},
+		{"console/service/README.md", []string{"ghcr.io/erhuz/automation:2.9.0-management.6"}, []string{"ghcr.io/erhuz/automation:latest"}},
+		{"console/service/internal/configuration/config.go", []string{"ghcr.io/erhuz/automation:2.9.0-management.6"}, []string{"ghcr.io/erhuz/automation:latest"}},
 	}
 
 	for _, contract := range contracts {
