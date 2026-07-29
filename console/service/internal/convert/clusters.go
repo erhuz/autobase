@@ -1,15 +1,17 @@
 package convert
 
 import (
+	"encoding/json"
 	"postgresql-cluster-console/internal/storage"
 	"postgresql-cluster-console/models"
+	"strings"
 
 	"github.com/go-openapi/strfmt"
 )
 
 func ClusterToSwagger(cl *storage.Cluster, servers []storage.Server, environmentCode, projectCode string) *models.ClusterInfo {
 	clusterInfo := &models.ClusterInfo{
-		ConnectionInfo: cl.ConnectionInfo,
+		ConnectionInfo: visibleConnectionInfo(cl.ConnectionInfo),
 		CreationTime:   strfmt.DateTime(cl.CreatedAt),
 		ClusterLocation: func() string {
 			if cl.Location != nil {
@@ -59,4 +61,34 @@ func ClusterToSwagger(cl *storage.Cluster, servers []storage.Server, environment
 	}
 
 	return clusterInfo
+}
+
+func visibleConnectionInfo(raw any) any {
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	var value any
+	if err = json.Unmarshal(data, &value); err != nil {
+		return nil
+	}
+	redactConnectionPasswords(value)
+	return value
+}
+
+func redactConnectionPasswords(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			if strings.EqualFold(key, "password") {
+				delete(typed, key)
+			} else {
+				redactConnectionPasswords(child)
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			redactConnectionPasswords(child)
+		}
+	}
 }

@@ -1,9 +1,10 @@
 import { ReactNode } from 'react';
 
 export interface ConnectionInfoProps {
+  clusterId?: number;
   connectionInfo?: {
-    address?: string | Record<string, string>;
-    port?: string | Record<string, string>;
+    address?: string | string[] | Record<string, string | string[]>;
+    port?: string | number | Record<string, string | number>;
     superuser?: string;
     password?: string;
   };

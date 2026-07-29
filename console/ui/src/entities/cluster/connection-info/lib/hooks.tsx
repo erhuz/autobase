@@ -1,7 +1,5 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { IconButton, Stack, Typography } from '@mui/material';
-import EyeIcon from '@mui/icons-material/VisibilityOutlined';
+import { Typography } from '@mui/material';
 
 import CopyIcon from '@shared/ui/copy-icon';
 import ConnectionInfoRowContainer from '@entities/cluster/connection-info/ui/ConnectionInfoRowConteiner.tsx';
@@ -13,13 +11,10 @@ export const useGetConnectionInfoConfig = ({
   connectionInfo: ConnectionInfoProps['connectionInfo'];
 }): { title: string; children: React.ReactNode }[] => {
   const { t } = useTranslation(['clusters', 'shared']);
-  const [isPasswordHidden, setIsPasswordHidden] = useState(true);
-
-  const togglePasswordVisibility = () => setIsPasswordHidden((prev) => !prev);
 
   const iconFontSize = '16px';
 
-  const renderCollection = (collection: string | object, defaultLabel: string) => {
+  const renderCollection = (collection: string | number | object, defaultLabel: string) => {
     if (typeof collection === 'string' || typeof collection === 'number') {
       return [
         {
@@ -52,35 +47,5 @@ export const useGetConnectionInfoConfig = ({
   return [
     ...(connectionInfo?.address ? renderCollection(connectionInfo.address, t('address', { ns: 'shared' })) : []),
     ...(connectionInfo?.port ? renderCollection(connectionInfo.port, t('port', { ns: 'clusters' })) : []),
-    {
-      title: t('user', { ns: 'shared' }),
-      children: (
-        <ConnectionInfoRowContainer>
-          <Typography>{connectionInfo?.superuser || 'postgres'}</Typography>
-          <CopyIcon valueToCopy={connectionInfo?.superuser || 'postgres'} sx={{ fontSize: iconFontSize }} />
-        </ConnectionInfoRowContainer>
-      ),
-    },
-    {
-      title: t('password', { ns: 'shared' }),
-      children: (
-        <ConnectionInfoRowContainer>
-          <Typography>
-            {isPasswordHidden
-              ? (connectionInfo?.password || 'N/A').replace(/./g, '*')
-              : connectionInfo?.password || 'N/A'}
-          </Typography>
-          <Stack direction="row" alignItems="center" gap={1}>
-            <IconButton
-              size="small"
-              aria-label={t(isPasswordHidden ? 'showPassword' : 'hidePassword', { ns: 'shared' })}
-              onClick={togglePasswordVisibility}>
-              <EyeIcon sx={{ fontSize: iconFontSize }} />
-            </IconButton>
-            <CopyIcon valueToCopy={connectionInfo?.password || 'N/A'} sx={{ fontSize: iconFontSize }} />
-          </Stack>
-        </ConnectionInfoRowContainer>
-      ),
-    },
   ];
 };

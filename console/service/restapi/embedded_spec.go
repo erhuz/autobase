@@ -733,6 +733,44 @@ func init() {
         }
       }
     },
+    "/clusters/{id}/routing": {
+      "patch": {
+        "tags": [
+          "cluster"
+        ],
+        "summary": "Update cluster routing metadata",
+        "parameters": [
+          {
+            "type": "integer",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/Request.ClusterRouting"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/ClusterInfo"
+            }
+          },
+          "400": {
+            "description": "Error",
+            "schema": {
+              "$ref": "#/definitions/Response.Error"
+            }
+          }
+        }
+      }
+    },
     "/clusters/{id}/start": {
       "post": {
         "tags": [
@@ -2383,6 +2421,33 @@ func init() {
     "Request.ClusterRestart": {
       "description": "Restart cluster",
       "type": "object"
+    },
+    "Request.ClusterRouting": {
+      "description": "Routing role map; values match Request.ClusterRoutingTarget and null removes an optional role",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "Request.ClusterRoutingTarget": {
+      "type": "object",
+      "required": [
+        "addresses",
+        "port"
+      ],
+      "properties": {
+        "addresses": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "port": {
+          "type": "integer",
+          "format": "int64",
+          "maximum": 65535,
+          "minimum": 1
+        }
+      }
     },
     "Request.ClusterStart": {
       "description": "Start cluster",
@@ -4307,6 +4372,44 @@ func init() {
         }
       }
     },
+    "/clusters/{id}/routing": {
+      "patch": {
+        "tags": [
+          "cluster"
+        ],
+        "summary": "Update cluster routing metadata",
+        "parameters": [
+          {
+            "type": "integer",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/Request.ClusterRouting"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/ClusterInfo"
+            }
+          },
+          "400": {
+            "description": "Error",
+            "schema": {
+              "$ref": "#/definitions/Response.Error"
+            }
+          }
+        }
+      }
+    },
     "/clusters/{id}/start": {
       "post": {
         "tags": [
@@ -5960,6 +6063,33 @@ func init() {
     "Request.ClusterRestart": {
       "description": "Restart cluster",
       "type": "object"
+    },
+    "Request.ClusterRouting": {
+      "description": "Routing role map; values match Request.ClusterRoutingTarget and null removes an optional role",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "Request.ClusterRoutingTarget": {
+      "type": "object",
+      "required": [
+        "addresses",
+        "port"
+      ],
+      "properties": {
+        "addresses": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "port": {
+          "type": "integer",
+          "format": "int64",
+          "maximum": 65535,
+          "minimum": 1
+        }
+      }
     },
     "Request.ClusterStart": {
       "description": "Start cluster",

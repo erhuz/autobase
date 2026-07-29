@@ -186,6 +186,12 @@ func NewPgConsoleAPI(spec *loads.Document) *PgConsoleAPI {
 			return middleware.NotImplemented("operation system.GetVersion has not yet been implemented")
 		}),
 
+		ClusterPatchClustersIDRoutingHandler: cluster.PatchClustersIDRoutingHandlerFunc(func(params cluster.PatchClustersIDRoutingParams) middleware.Responder {
+			_ = params
+
+			return middleware.NotImplemented("operation cluster.PatchClustersIDRouting has not yet been implemented")
+		}),
+
 		ProjectPatchProjectsIDHandler: project.PatchProjectsIDHandlerFunc(func(params project.PatchProjectsIDParams) middleware.Responder {
 			_ = params
 
@@ -382,6 +388,8 @@ type PgConsoleAPI struct {
 	SettingGetSettingsHandler setting.GetSettingsHandler
 	// SystemGetVersionHandler sets the operation handler for the get version operation
 	SystemGetVersionHandler system.GetVersionHandler
+	// ClusterPatchClustersIDRoutingHandler sets the operation handler for the patch clusters ID routing operation
+	ClusterPatchClustersIDRoutingHandler cluster.PatchClustersIDRoutingHandler
 	// ProjectPatchProjectsIDHandler sets the operation handler for the patch projects ID operation
 	ProjectPatchProjectsIDHandler project.PatchProjectsIDHandler
 	// SecretPatchSecretsIDHandler sets the operation handler for the patch secrets ID operation
@@ -565,6 +573,9 @@ func (o *PgConsoleAPI) Validate() error {
 	}
 	if o.SystemGetVersionHandler == nil {
 		unregistered = append(unregistered, "system.GetVersionHandler")
+	}
+	if o.ClusterPatchClustersIDRoutingHandler == nil {
+		unregistered = append(unregistered, "cluster.PatchClustersIDRoutingHandler")
 	}
 	if o.ProjectPatchProjectsIDHandler == nil {
 		unregistered = append(unregistered, "project.PatchProjectsIDHandler")
@@ -804,6 +815,10 @@ func (o *PgConsoleAPI) initHandlerCache() {
 		o.handlers["GET"] = make(map[string]http.Handler)
 	}
 	o.handlers["GET"]["/version"] = system.NewGetVersion(o.context, o.SystemGetVersionHandler)
+	if o.handlers["PATCH"] == nil {
+		o.handlers["PATCH"] = make(map[string]http.Handler)
+	}
+	o.handlers["PATCH"]["/clusters/{id}/routing"] = cluster.NewPatchClustersIDRouting(o.context, o.ClusterPatchClustersIDRoutingHandler)
 	if o.handlers["PATCH"] == nil {
 		o.handlers["PATCH"] = make(map[string]http.Handler)
 	}

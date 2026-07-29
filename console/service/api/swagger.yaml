@@ -463,6 +463,31 @@ paths:
           schema:
             $ref: "#/definitions/Response.Error"
 
+  /clusters/{id}/routing:
+    patch:
+      summary: "Update cluster routing metadata"
+      tags:
+        - cluster
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: integer
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/Request.ClusterRouting"
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: "#/definitions/ClusterInfo"
+        '400':
+          description: Error
+          schema:
+            $ref: "#/definitions/Response.Error"
+
   /clusters/{id}/query-performance:
     get:
       summary: "Get cluster query performance overview"
@@ -1856,6 +1881,28 @@ definitions:
         type: integer
         format: int64
         x-nullable: true
+
+  Request.ClusterRouting:
+    type: object
+    description: "Routing role map; values match Request.ClusterRoutingTarget and null removes an optional role"
+    additionalProperties: true
+
+  Request.ClusterRoutingTarget:
+    type: object
+    required:
+      - addresses
+      - port
+    properties:
+      addresses:
+        type: array
+        minItems: 1
+        items:
+          type: string
+      port:
+        type: integer
+        format: int64
+        minimum: 1
+        maximum: 65535
 
 
   Response.ClusterDefaultName:

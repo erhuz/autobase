@@ -56,6 +56,14 @@ const injectedRtkApi = api.injectEndpoints({
       }),
       invalidatesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
     }),
+    patchClustersByIdRouting: build.mutation<PatchClustersByIdRoutingApiResponse, PatchClustersByIdRoutingApiArg>({
+      query: (queryArg) => ({
+        url: `/clusters/${queryArg.id}/routing`,
+        method: 'PATCH',
+        body: queryArg.requestClusterRouting,
+      }),
+      invalidatesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
+    }),
     getClustersByIdHealth: build.query<GetClustersByIdHealthApiResponse, GetClustersByIdHealthApiArg>({
       query: (queryArg) => ({ url: `/clusters/${queryArg.id}/health` }),
       providesTags: (result, error, { id }) => [{ type: 'Clusters', id }],
@@ -211,6 +219,11 @@ export type PutClustersByIdAutomationCredentialsApiResponse = /** status 200 OK 
 export type PutClustersByIdAutomationCredentialsApiArg = {
   id: number;
   requestClusterAutomationCredentials: RequestClusterAutomationCredentials;
+};
+export type PatchClustersByIdRoutingApiResponse = /** status 200 OK */ ClusterInfo;
+export type PatchClustersByIdRoutingApiArg = {
+  id: number;
+  requestClusterRouting: RequestClusterRouting;
 };
 export type GetClustersByIdHealthApiResponse = ResponseClusterHealth;
 export type GetClustersByIdHealthApiArg = {
@@ -577,6 +590,13 @@ export type RequestClusterAutomationCredentials = {
   postgres_replication_secret_id?: number | null;
   patroni_restapi_secret_id?: number | null;
 };
+export type RequestClusterRoutingTarget = {
+  addresses: string[];
+  port: number;
+};
+export type RequestClusterRouting = Partial<
+  Record<'primary' | 'replica' | 'replica_sync' | 'replica_async', RequestClusterRoutingTarget | null>
+>;
 export const {
   usePostClustersMutation,
   useGetClustersQuery,
@@ -587,6 +607,7 @@ export const {
   useLazyGetClustersByIdQuery,
   usePutClustersByIdCredentialMutation,
   usePutClustersByIdAutomationCredentialsMutation,
+  usePatchClustersByIdRoutingMutation,
   useGetClustersByIdHealthQuery,
   useLazyGetClustersByIdHealthQuery,
   useGetClustersByIdQueryPerformanceQuery,

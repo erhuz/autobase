@@ -32,7 +32,7 @@ doc: `MANAGEMENT_VISION.md` → product authority for scope, phases, safety, suc
 ui.health: `/clusters/:clusterId/overview` → triage-first availability/recoverability + topology + DCS + routing + backup + operation summary + guarded action entry.
 ui.ops: `/operations` + `/operations/:operationId/log` → queue/state/filter/detail/log/failure/verification.
 ui.query: `/clusters/:clusterId/query-performance` → state/coverage/filter/KPI/trend/top-query/detail/enable/disable.
-ui.access: `/clusters/:clusterId/access` → connection values + management credential + 3 automation credential bindings.
+ui.access: `/clusters/:clusterId/access` → editable role routing + management credential + 3 automation credential bindings; PostgreSQL identity from superuser secret; secret values ⊥ read.
 ui.secrets: Settings → encrypted password secret create; password input masked; values ⊥ read.
 api.health: `GET /clusters/{id}/health` → `{observed_at,topology,dcs,routing,backup,operation,recoverability}`.
 api.query: `GET /clusters/{id}/query-performance` + `GET /clusters/{id}/query-performance/{fingerprintId}` → `{status,coverage,summary,series,queries|fingerprint,filters?,histogram?}`.
@@ -40,6 +40,7 @@ api.preflight: `POST /clusters/{id}/preflights` `{type,target?,params?}` → `{i
 api.run: `POST /clusters/{id}/operations` `{preflight_id,confirmation}` → `{operation_id,status}`.
 api.credential: `PUT /clusters/{id}/credential` `{secret_id}` → `ClusterInfo`; secret value ⊥ response.
 api.automation_credentials: `PUT /clusters/{id}/automation-credentials` `{postgres_superuser_secret_id:int|null,postgres_replication_secret_id:int|null,patroni_restapi_secret_id:int|null}` → `ClusterInfo`; full atomic replace; values ⊥ response.
+api.routing: `PATCH /clusters/{id}/routing` `{primary?:target,replica?:target|null,replica_sync?:target|null,replica_async?:target|null}`; `target={addresses:[string],port:int}` → `ClusterInfo`; omitted role unchanged.
 api.ops: `GET /operations` + `GET /operations/{id}` + `GET /operations/{id}/log` → durable operation/audit state.
 op.v1: `type ∈ {switchover,reload,rolling_restart,replica_reinit,backup_full,backup_diff,backup_scheduler_reconcile,query_analytics_enable,query_analytics_disable}`.
 op.credentials: `query_analytics_enable|query_analytics_disable` → superuser+REST; `node_add|config_update|postgresql_upgrade|restore|pitr` → superuser+replication+REST; `backup_full|backup_diff|backup_scheduler_reconcile` → ∅; remaining guarded ops → superuser; undeclared op → block.
@@ -123,6 +124,7 @@ V63: `restore_tested_at` updated only after successful isolated restore/PITR fin
 V64: DB/Docker diagnostic logging accepts typed-nil args + absent `CtxCidKey`; panic ⊥; operation flow unchanged; Docker bodies/secrets ⊥ logs.
 V65: query analytics enable|disable → preflight-bound primary routes ! nonempty; launch passes `operation_primary_routing_targets`; Automation validates before config/service mutation; each serial restart stage verifies ∀ route writable; absent|changed input → stop pre-mutation.
 V66: Overview Coordination & routing replica list → ∀ replica own stacked row; `; ` separator ⊥; existing member detail + `—` empty state preserved.
+V67: imported-cluster Access routing edit → Console DB only; resulting primary ≥1 valid hostname|IP + port ∈ `1..65535`; optional role `null` → remove; omitted role unchanged; unrelated `connection_info` preserved; managed-cluster contact/mutation + plaintext credential input/API output ⊥.
 
 ## §T
 
@@ -166,6 +168,7 @@ T36|x|add guarded pgBackRest scheduler reconcile via existing role + duplicate-o
 T37|x|bind restore evidence to verified isolated restore/PITR completion|V17,V26,V30,V32,V63,I.api.health,I.authority,I.automation,I.verify
 T38|x|bind query-analytics primary routes → desired/Automation; add pre-mutation guards + regressions|V22,V24,V32,V36,V37,V65,I.automation.query,I.authority,I.verify
 T39|x|stack Overview Coordination & routing replicas 1/row + regression|V11,V56,V57,V66,I.ui.health,I.verify
+T40|x|add Access routing editor + validated routing API + imported-cluster preflight regression|V3,V8,V32,V44,V59,V65,V67,I.ui.access,I.api.routing,I.authority,I.verify
 
 ## §B
 
@@ -258,3 +261,4 @@ B85|2026-07-28|pgBackRest scheduler cron remained on every member; concurrent jo
 B86|2026-07-28|typed-nil backup timestamps panicked SQL trace; CID-less deferred Docker cleanup panicked before DELETE → exited containers accumulated|V61,V64
 B87|2026-07-28|Automation gate used forbidden destructive temp cleanup; syntax checks never started|V45
 B88|2026-07-29|query-analytics desired/launch omitted `operation_primary_routing_targets` required by shared restart verifier; operation failed after first replica restart|V65
+B89|2026-07-29|T38 required stored primary routing but imported-cluster Access/API exposed connection metadata read-only|V67

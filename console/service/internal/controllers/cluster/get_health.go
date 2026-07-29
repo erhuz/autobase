@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"encoding/json"
+	"net"
 	"net/url"
 	"sort"
 	"strconv"
@@ -346,6 +347,10 @@ func healthStrings(value any) []string {
 	case string:
 		for _, item := range strings.Split(typed, ",") {
 			if item = strings.TrimSpace(item); item != "" && item != "N/A" {
+				if ip := net.ParseIP(strings.Trim(item, "[]")); ip != nil {
+					values = append(values, ip.String())
+					continue
+				}
 				candidate := item
 				if !strings.Contains(candidate, "://") {
 					candidate = "//" + candidate

@@ -11,7 +11,7 @@ const ClusterAccess: FC = () => {
   return (
     <Grid container spacing={2} sx={{ p: { xs: 1, sm: 2 } }} alignItems="stretch">
       <Grid size={{ xs: 12, lg: 6 }}>
-        <ConnectionInfo connectionInfo={cluster.connection_info} servers={cluster.servers} />
+        <ConnectionInfo clusterId={cluster.id} connectionInfo={cluster.connection_info} servers={cluster.servers} />
       </Grid>
       <Grid size={{ xs: 12, lg: 6 }}>
         <ClusterInfo
