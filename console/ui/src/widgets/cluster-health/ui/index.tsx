@@ -221,7 +221,23 @@ const ClusterHealth: FC<ClusterHealthProps> = ({ clusterId, children }) => {
               </DetailRow>
               <DetailRow label={t('healthLeader')}>{formatMember(topology?.leader)}</DetailRow>
               <DetailRow label={t('healthReplicas')}>
-                {topology?.replicas?.length ? topology.replicas.map(formatMember).join('; ') : '—'}
+                {topology?.replicas?.length ? (
+                  <Stack
+                    component="ul"
+                    aria-label={t('healthReplicas')}
+                    gap={0.25}
+                    m={0}
+                    p={0}
+                    sx={{ listStyle: 'none' }}>
+                    {topology.replicas.map((replica, index) => (
+                      <Box component="li" key={`${replica.name}-${index}`}>
+                        {formatMember(replica)}
+                      </Box>
+                    ))}
+                  </Stack>
+                ) : (
+                  '—'
+                )}
               </DetailRow>
               <DetailRow label={t('healthType')}>{humanize(dcs?.type)}</DetailRow>
               <DetailRow label={t('healthReachable')}>

@@ -122,6 +122,7 @@ V62: backup observer read-only; duplicate scheduler owners visible + backup muta
 V63: `restore_tested_at` updated only after successful isolated restore/PITR final verification; configured/operator timestamp alone ⊥; absent evidence → recoverability degraded.
 V64: DB/Docker diagnostic logging accepts typed-nil args + absent `CtxCidKey`; panic ⊥; operation flow unchanged; Docker bodies/secrets ⊥ logs.
 V65: query analytics enable|disable → preflight-bound primary routes ! nonempty; launch passes `operation_primary_routing_targets`; Automation validates before config/service mutation; each serial restart stage verifies ∀ route writable; absent|changed input → stop pre-mutation.
+V66: Overview Coordination & routing replica list → ∀ replica own stacked row; `; ` separator ⊥; existing member detail + `—` empty state preserved.
 
 ## §T
 
@@ -164,6 +165,7 @@ T35|x|derive DCS reachability from existing Patroni watcher evidence + health/UI
 T36|x|add guarded pgBackRest scheduler reconcile via existing role + duplicate-owner contract|V4,V17,V21,V22,V26,V27,V32,V54,V62,I.api.preflight,I.api.run,I.op.v1,I.authority,I.automation,I.verify
 T37|x|bind restore evidence to verified isolated restore/PITR completion|V17,V26,V30,V32,V63,I.api.health,I.authority,I.automation,I.verify
 T38|x|bind query-analytics primary routes → desired/Automation; add pre-mutation guards + regressions|V22,V24,V32,V36,V37,V65,I.automation.query,I.authority,I.verify
+T39|x|stack Overview Coordination & routing replicas 1/row + regression|V11,V56,V57,V66,I.ui.health,I.verify
 
 ## §B
 

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -14,7 +14,10 @@ vi.mock('@shared/api/api/clusters.ts', () => ({
         state: 'healthy',
         patroni_reachable: true,
         leader: { name: 'postgresql-1', role: 'leader', state: 'running', timeline: 7, lag: 0 },
-        replicas: [{ name: 'postgresql-2', role: 'replica', state: 'streaming', timeline: 7, lag: 0 }],
+        replicas: [
+          { name: 'postgresql-2', role: 'replica', state: 'streaming', timeline: 7, lag: 0 },
+          { name: 'postgresql-3', role: 'replica', state: 'streaming', timeline: 7, lag: 0 },
+        ],
       },
       dcs: { state: 'healthy', type: 'etcd', reachable: true, members: ['dcs-1', 'dcs-2'] },
       routing: {
@@ -54,6 +57,10 @@ describe('cluster health UI', () => {
     );
 
     expect(screen.getByText(/postgresql-1 · leader · running/)).toBeInTheDocument();
+    const replicas = screen.getByRole('list', { name: 'Replicas' });
+    expect(within(replicas).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(replicas).getByText(/postgresql-2 · replica · streaming/)).toBeInTheDocument();
+    expect(within(replicas).getByText(/postgresql-3 · replica · streaming/)).toBeInTheDocument();
     expect(screen.getByText('Members')).toBeInTheDocument();
     expect(screen.getByText('dcs-1, dcs-2')).toBeInTheDocument();
     expect(screen.getByText(/etcd · reachable: yes/i)).toBeInTheDocument();
