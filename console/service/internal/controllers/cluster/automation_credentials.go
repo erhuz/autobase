@@ -179,6 +179,12 @@ func (h *guardedOperationsHandler) injectAutomationCredentials(
 	if err = json.Unmarshal(extraVars, &values); err != nil {
 		return nil, err
 	}
+	switch operationType {
+	case storage.OperationTypeBackupFull, storage.OperationTypeBackupDiff, storage.OperationTypeBackupSchedulerReconcile,
+		storage.OperationTypeRestore, storage.OperationTypePITR:
+	default:
+		delete(values, "patroni_cluster_name")
+	}
 	purposes := make([]string, 0, len(required))
 	for _, purpose := range required {
 		secretID := automationCredentialID(clusterInfo, purpose)

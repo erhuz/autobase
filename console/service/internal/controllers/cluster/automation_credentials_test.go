@@ -54,7 +54,8 @@ func TestAutomationCredentialsAreInjectedOnlyAtLaunch(t *testing.T) {
 		store, nil, nil, blockedPreflightWatcher{}, &configuration.Config{}, zerolog.Nop(),
 	)
 	payload, err := handler.injectAutomationCredentials(
-		context.Background(), store.cluster, storage.OperationTypePostgreSQLUpgrade, []byte(`{"fixed":true}`),
+		context.Background(), store.cluster, storage.OperationTypePostgreSQLUpgrade,
+		[]byte(`{"fixed":true,"patroni_cluster_name":"postgres-cluster-01"}`),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -64,18 +65,33 @@ func TestAutomationCredentialsAreInjectedOnlyAtLaunch(t *testing.T) {
 		inputs["patroni_superuser_password"] != "service-secret" ||
 		inputs["patroni_replication_password"] != "service-secret" ||
 		inputs["patroni_restapi_password"] != "service-secret" ||
+		inputs["patroni_cluster_name"] != nil ||
 		inputs["fixed"] != true {
 		t.Fatalf("inputs=%v", inputs)
 	}
 
 	restore, err := handler.injectAutomationCredentials(
-		context.Background(), store.cluster, storage.OperationTypeRestore, []byte(`{}`),
+		context.Background(), store.cluster, storage.OperationTypeRestore,
+		[]byte(`{"patroni_cluster_name":"restore-target"}`),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if json.Unmarshal(restore, &inputs) != nil || inputs["operation_credentials_validate_only"] != true {
+	if json.Unmarshal(restore, &inputs) != nil ||
+		inputs["patroni_cluster_name"] != "restore-target" ||
+		inputs["operation_credentials_validate_only"] != true {
 		t.Fatalf("restore inputs=%v", inputs)
+	}
+
+	backup, err := handler.injectAutomationCredentials(
+		context.Background(), store.cluster, storage.OperationTypeBackupFull,
+		[]byte(`{"patroni_cluster_name":"backup-stanza"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if json.Unmarshal(backup, &inputs) != nil || inputs["patroni_cluster_name"] != "backup-stanza" {
+		t.Fatalf("backup inputs=%v", inputs)
 	}
 }
 

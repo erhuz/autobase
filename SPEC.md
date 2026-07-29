@@ -125,7 +125,7 @@ V64: DB/Docker diagnostic logging accepts typed-nil args + absent `CtxCidKey`; p
 V65: query analytics enable|disable → preflight-bound primary routes ! nonempty; launch passes `operation_primary_routing_targets`; Automation validates before config/service mutation; each serial restart stage verifies ∀ route writable; absent|changed input → stop pre-mutation.
 V66: Overview Coordination & routing replica list → ∀ replica own stacked row; `; ` separator ⊥; existing member detail + `—` empty state preserved.
 V67: imported-cluster Access routing edit → Console DB only; resulting primary ≥1 valid hostname|IP + port ∈ `1..65535`; optional role `null` → remove; omitted role unchanged; unrelated `connection_info` preserved; managed-cluster contact/mutation + plaintext credential input/API output ⊥.
-V68: ∀ Automation-backed Patroni mutation → live scope from current Patroni response; all healthy members agree; bind + recheck before first mutation; CLI DCS @ scope = 1 leader + all expected members; Console name as scope ⊥.
+V68: ∀ Automation-backed Patroni mutation → Console launch omits display-name `patroni_cluster_name`; live scope from current Patroni response; all healthy members agree; effective legacy scope = live scope before first mutation; CLI DCS @ live scope = 1 leader + all expected members; conflict → fail pre-mutation.
 
 ## §T
 
@@ -171,6 +171,7 @@ T38|x|bind query-analytics primary routes → desired/Automation; add pre-mutati
 T39|x|stack Overview Coordination & routing replicas 1/row + regression|V11,V56,V57,V66,I.ui.health,I.verify
 T40|x|add Access routing editor + validated routing API + imported-cluster preflight regression|V3,V8,V32,V44,V59,V65,V67,I.ui.access,I.api.routing,I.authority,I.verify
 T41|x|detect/bind/recheck live Patroni scope; gate CLI topology before first mutation; add Automation regressions|V5,V22,V23,V29,V37,V45,V68,I.automation,I.authority,I.verify
+T42|x|strip Console scope extra-var; enforce live-scope precedence + diagnostics; regress|V5,V22,V23,V29,V37,V45,V68,I.automation,I.authority,I.verify
 
 ## §B
 
@@ -269,3 +270,4 @@ B91|2026-07-29|rolling update assumed Console name = live Patroni scope; CLI que
 B92|2026-07-29|Automation contract doubled nested quote literals; valid leader gate source failed exact-string assertion|V45
 B93|2026-07-29|Automation contract templated literal scope argv without runtime vars; assertion operand became undefined|V45
 B94|2026-07-29|release metadata probe piped boolean into `startswith`; later command masked jq failure with exit 0|V55
+B95|2026-07-29|T41 `set_fact` could not override Console `--extra-vars patroni_cluster_name`; display name still selected empty DCS scope|V68
