@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	queryAnalyticsApplication = "autobase-query-collector"
-	queryAnalyticsVersion     = "2.3.2"
+	queryAnalyticsApplication      = "autobase-query-collector"
+	queryAnalyticsReleaseVersion   = "2.3.2"
+	queryAnalyticsExtensionVersion = "2.3"
 )
 
 type QueryAnalyticsWatcher interface {
@@ -164,27 +165,27 @@ func (w *queryAnalyticsWatcher) collectServer(cluster *storage.Cluster, server *
 		w.markSource(cluster.ID, server.ID, "unsupported", code, nil, nil)
 		return
 	}
-	if capability.ExtensionVersion != queryAnalyticsVersion || !capability.PrivacySafe {
+	if !queryAnalyticsVersionsSupported(capability.ReleaseVersion, capability.ExtensionVersion) || !capability.PrivacySafe {
 		code := "extension_version_mismatch"
 		if !capability.PrivacySafe {
 			code = "privacy_drift"
 		}
-		w.markSource(cluster.ID, server.ID, "unsupported", code, &capability.NodeBootTime, &capability.ExtensionVersion)
+		w.markSource(cluster.ID, server.ID, "unsupported", code, &capability.NodeBootTime, &capability.ReleaseVersion)
 		return
 	}
 
 	buckets, err := readQueryAnalyticsBuckets(ctx, conn, cluster.ID, server.ID, capability.NodeBootTime, capability.PostgresVersion)
 	if err != nil {
-		w.markSource(cluster.ID, server.ID, "unreachable", "collection_query_failed", &capability.NodeBootTime, &capability.ExtensionVersion)
+		w.markSource(cluster.ID, server.ID, "unreachable", "collection_query_failed", &capability.NodeBootTime, &capability.ReleaseVersion)
 		return
 	}
 	for i := range buckets {
 		if err = w.db.IngestQueryAnalyticsBucket(ctx, &buckets[i]); err != nil {
-			w.markSource(cluster.ID, server.ID, "unreachable", "ingest_failed", &capability.NodeBootTime, &capability.ExtensionVersion)
+			w.markSource(cluster.ID, server.ID, "unreachable", "ingest_failed", &capability.NodeBootTime, &capability.ReleaseVersion)
 			return
 		}
 	}
-	w.markSource(cluster.ID, server.ID, "healthy", "", &capability.NodeBootTime, &capability.ExtensionVersion)
+	w.markSource(cluster.ID, server.ID, "healthy", "", &capability.NodeBootTime, &capability.ReleaseVersion)
 }
 
 func (w *queryAnalyticsWatcher) markSource(clusterID, serverID int64, status, errorCode string, bootTime *time.Time, version *string) {
@@ -206,6 +207,7 @@ func (w *queryAnalyticsWatcher) markSource(clusterID, serverID int64, status, er
 }
 
 type queryAnalyticsCapability struct {
+	ReleaseVersion   string
 	ExtensionVersion string
 	NodeBootTime     time.Time
 	PostgresVersion  int
@@ -231,8 +233,15 @@ func readQueryAnalyticsCapability(ctx context.Context, conn *pgx.Conn) (*queryAn
 	if err != nil {
 		return nil, err
 	}
+	if err = conn.QueryRow(ctx, `select pg_stat_monitor_version()`).Scan(&result.ReleaseVersion); err != nil {
+		return nil, err
+	}
 	result.PrivacySafe = queryAnalyticsPrivacySafe(normalized, applicationNames, queryID, utility, planning, comments, plans)
 	return &result, nil
+}
+
+func queryAnalyticsVersionsSupported(releaseVersion, extensionVersion string) bool {
+	return releaseVersion == queryAnalyticsReleaseVersion && extensionVersion == queryAnalyticsExtensionVersion
 }
 
 func queryAnalyticsPrivacySafe(normalized, applicationNames, queryID, utility, planning, comments, plans string) bool {

@@ -307,6 +307,7 @@ postgresql_stats_temp_directory_size: "1024m"
 # Query performance analytics. Console-created clusters override this to true by default.
 enable_pg_stat_monitor: false
 pg_stat_monitor_version: "2.3.2"
+pg_stat_monitor_extension_version: "2.3"
 query_analytics_monitor_username: "autobase_query_monitor"
 query_analytics_monitor_password: ""
 query_analytics_collector_cidrs: []

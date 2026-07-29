@@ -26,6 +26,17 @@ func TestQueryAnalyticsCollectionPrivacyContract(t *testing.T) {
 	}
 }
 
+func TestV69QueryAnalyticsVersionContract(t *testing.T) {
+	if !queryAnalyticsVersionsSupported("2.3.2", "2.3") {
+		t.Fatal("release 2.3.2 with schema 2.3 rejected")
+	}
+	for _, versions := range [][2]string{{"2.3", "2.3"}, {"2.3.2", "2.3.2"}} {
+		if queryAnalyticsVersionsSupported(versions[0], versions[1]) {
+			t.Fatalf("unsupported release/schema pair accepted: %v", versions)
+		}
+	}
+}
+
 func TestQueryAnalyticsMergeAndTopUnion(t *testing.T) {
 	bucket := storage.QueryAnalyticsBucket{}
 	indexes := map[string]int{}

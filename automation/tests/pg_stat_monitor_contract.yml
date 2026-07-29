@@ -6,6 +6,7 @@
   vars:
     enable_pg_stat_monitor: true
     pg_stat_monitor_version: "2.3.2"
+    pg_stat_monitor_extension_version: "2.3"
     postgresql_version: "16"
     ansible_architecture: x86_64
     query_analytics_monitor_username: autobase_query_monitor
@@ -50,7 +51,7 @@
           - "'percona-pg-stat-monitor' in package_tasks"
           - "'pg_stat_monitor_' in package_tasks"
           - "'repo.percona.com' in repository_tasks"
-          - "'pg_stat_monitor_version' in database_object_tasks"
+          - "'pg_stat_monitor_extension_version' in database_object_tasks"
           - "'git clone' not in package_tasks"
           - "'make install' not in package_tasks"
       vars:
@@ -66,7 +67,12 @@
           - normalized_setting in operation_playbook
           - plan_setting in operation_playbook
           - comment_setting in operation_playbook
-          - exact_version in operation_playbook
+          - schema_version in operation_playbook
+          - release_version_check in operation_playbook
+          - "operation_playbook | regex_findall(common_defaults) | length == 3"
+          - "operation_playbook | regex_findall(leader_statuses | regex_escape) | length == 2"
+          - swallowed_probe not in operation_playbook
+          - "operation_playbook | regex_findall(single_leader_guard) | length == 2"
           - restart_import in operation_playbook
           - primary_routing_guard in operation_playbook
           - primary_routing_guard in restart_playbook
@@ -84,7 +90,12 @@
         normalized_setting: pg_stat_monitor.pgsm_normalized_query
         plan_setting: pg_stat_monitor.pgsm_enable_query_plan
         comment_setting: pg_stat_monitor.pgsm_extract_comments
-        exact_version: "pg_stat_monitor_version | default('2.3.2')"
+        schema_version: "pg_stat_monitor_extension_version | default('2.3')"
+        release_version_check: pg_stat_monitor_version()
+        common_defaults: "name: vitabaks.autobase.common"
+        leader_statuses: "status_code: [200, 503]"
+        swallowed_probe: "failed_when: false"
+        single_leader_guard: "Require exactly one current Patroni leader"
         restart_import: "import_playbook: restart_pgcluster.yml"
         primary_routing_guard: "operation_primary_routing_targets | default([]) | length > 0"
         serial_restart: "serial: 1"

@@ -126,6 +126,7 @@ V65: query analytics enable|disable → preflight-bound primary routes ! nonempt
 V66: Overview Coordination & routing replica list → ∀ replica own stacked row; `; ` separator ⊥; existing member detail + `—` empty state preserved.
 V67: imported-cluster Access routing edit → Console DB only; resulting primary ≥1 valid hostname|IP + port ∈ `1..65535`; optional role `null` → remove; omitted role unchanged; unrelated `connection_info` preserved; managed-cluster contact/mutation + plaintext credential input/API output ⊥.
 V68: ∀ Automation-backed Patroni mutation → Console launch omits display-name `patroni_cluster_name`; live scope from current Patroni response; all healthy members agree; effective legacy scope = live scope before first mutation; CLI DCS @ live scope = 1 leader + all expected members; conflict → fail pre-mutation.
+V69: ∀ query-analytics Patroni REST probe → play-scoped CA defaults + transport failure fatal; leader-only mutation iff all members return `200|503` & exactly 1 returns `200`; PGSM release `2.3.2` ≠ SQL schema `2.3`; both ! exact before success|collection.
 
 ## §T
 
@@ -173,6 +174,8 @@ T40|x|add Access routing editor + validated routing API + imported-cluster prefl
 T41|x|detect/bind/recheck live Patroni scope; gate CLI topology before first mutation; add Automation regressions|V5,V22,V23,V29,V37,V45,V68,I.automation,I.authority,I.verify
 T42|x|strip Console scope extra-var; enforce live-scope precedence + diagnostics; regress|V5,V22,V23,V29,V37,V45,V68,I.automation,I.authority,I.verify
 T43|x|prepare immutable `2.9.0-management.9` live-scope precedence hotfix release set|V11,V12,V14,V15,V46,V47,V52,V55,V68,I.image,I.release,I.release.manifest,I.verify
+T44|x|fix Query Analytics CA-scoped fail-closed leader probes + PGSM release/schema split|V35,V36,V37,V40,V41,V45,V58,V59,V69,I.automation.query,I.verify
+T45|.|prepare immutable `2.9.0-management.10` Query Analytics hotfix release set|V11,V12,V14,V15,V46,V47,V52,V55,V69,I.image,I.release,I.release.manifest,I.verify
 
 ## §B
 
@@ -272,3 +275,4 @@ B92|2026-07-29|Automation contract doubled nested quote literals; valid leader g
 B93|2026-07-29|Automation contract templated literal scope argv without runtime vars; assertion operand became undefined|V45
 B94|2026-07-29|release metadata probe piped boolean into `startswith`; later command masked jq failure with exit 0|V55
 B95|2026-07-29|T41 `set_fact` could not override Console `--extra-vars patroni_cluster_name`; display name still selected empty DCS scope|V68
+B96|2026-07-29|query-analytics later plays lost common CA defaults + swallowed TLS probe; release `2.3.2` conflated with SQL schema `2.3`|V69

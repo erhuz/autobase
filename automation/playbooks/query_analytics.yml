@@ -41,7 +41,6 @@
         ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
       register: query_analytics_topology
       changed_when: false
-      failed_when: false
       check_mode: false
 
     - name: Require a healthy three-node Patroni topology
@@ -215,18 +214,37 @@
   become_method: sudo
   any_errors_fatal: true
   tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
     - name: Detect current leader
       ansible.builtin.uri:
         url: >-
           {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
             | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
             | default('8008') }}/leader
-        status_code: 200
+        status_code: [200, 503]
         ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
       register: query_analytics_leader
       changed_when: false
-      failed_when: false
       check_mode: false
+
+    - name: Require exactly one current Patroni leader before disable
+      ansible.builtin.assert:
+        that:
+          - query_analytics_leader_statuses | select('equalto', 200) | list | length == 1
+        fail_msg: Patroni REST topology does not contain exactly one current leader.
+      vars:
+        query_analytics_leader_statuses: >-
+          {{
+            groups.get('postgres_cluster', [])
+            | map('extract', hostvars)
+            | map(attribute='query_analytics_leader')
+            | map(attribute='status')
+            | list
+          }}
+      run_once: true # noqa run-once
 
     - name: Drop pg_stat_monitor extension
       become_user: postgres
@@ -259,18 +277,37 @@
   become_method: sudo
   any_errors_fatal: true
   tasks:
+    - name: Set default variables
+      ansible.builtin.import_role:
+        name: vitabaks.autobase.common
+
     - name: Detect current leader after controlled switchover
       ansible.builtin.uri:
         url: >-
           {{ patroni_restapi_protocol | default('https') }}://{{ patroni_restapi_connect_addr
             | default(patroni_bind_address | default(bind_address, true), true) }}:{{ patroni_restapi_port
             | default('8008') }}/leader
-        status_code: 200
+        status_code: [200, 503]
         ca_path: "{{ patroni_restapi_cafile | default(omit, true) }}"
       register: query_analytics_current_leader
       changed_when: false
-      failed_when: false
       check_mode: false
+
+    - name: Require exactly one current Patroni leader after controlled switchover
+      ansible.builtin.assert:
+        that:
+          - query_analytics_leader_statuses | select('equalto', 200) | list | length == 1
+        fail_msg: Patroni REST topology does not contain exactly one current leader.
+      vars:
+        query_analytics_leader_statuses: >-
+          {{
+            groups.get('postgres_cluster', [])
+            | map('extract', hostvars)
+            | map(attribute='query_analytics_current_leader')
+            | map(attribute='status')
+            | list
+          }}
+      run_once: true # noqa run-once
 
     - name: Create restricted monitoring role
       become_user: postgres
@@ -318,7 +355,7 @@
       become_user: postgres
       community.postgresql.postgresql_ext:
         name: pg_stat_monitor
-        version: "{{ pg_stat_monitor_version | default('2.3.2') }}"
+        version: "{{ pg_stat_monitor_extension_version | default('2.3') }}"
         login_db: postgres
         state: present
       when:
@@ -333,6 +370,7 @@
           - -Atqc
           - >-
             select coalesce((select extversion from pg_extension where extname='pg_stat_monitor'),'absent') || '|'
+            || pg_stat_monitor_version() || '|'
             || current_setting('shared_preload_libraries') || '|'
             || coalesce(current_setting('pg_stat_monitor.pgsm_normalized_query',true),'') || '|'
             || coalesce(current_setting('pg_stat_monitor.pgsm_enable_query_plan',true),'') || '|'
@@ -344,11 +382,13 @@
     - name: Assert exact safe enabled state
       ansible.builtin.assert:
         that:
-          - query_analytics_verify.stdout.split('|')[0] == '2.3.2'
-          - query_analytics_verify.stdout.split('|')[1].split(',') | last | trim == 'pg_stat_monitor'
-          - query_analytics_verify.stdout.split('|')[2] == 'on'
-          - query_analytics_verify.stdout.split('|')[3] == 'off'
+          - query_analytics_verify.stdout.split('|')[0] == (pg_stat_monitor_extension_version | default('2.3'))
+          - query_analytics_verify.stdout.split('|')[1] == (pg_stat_monitor_version | default('2.3.2'))
+          - query_analytics_verify.stdout.split('|')[2].split(',') | last | trim == 'pg_stat_monitor'
+          - query_analytics_verify.stdout.split('|')[3] == 'on'
           - query_analytics_verify.stdout.split('|')[4] == 'off'
+          - query_analytics_verify.stdout.split('|')[5] == 'off'
+        fail_msg: "Unexpected pg_stat_monitor state: {{ query_analytics_verify.stdout }}"
       when: query_analytics_state == 'enabled'
 
     - name: Verify disabled state on every node
