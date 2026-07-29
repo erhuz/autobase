@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "management-v1",
   "source_baseline": "2.9.0",
-  "release_version": "2.9.0-management.8",
+  "release_version": "2.9.0-management.9",
   "platform": "linux/amd64",
   "image_registry": "ghcr.io/erhuz",
   "components": {

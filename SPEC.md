@@ -172,6 +172,7 @@ T39|x|stack Overview Coordination & routing replicas 1/row + regression|V11,V56,
 T40|x|add Access routing editor + validated routing API + imported-cluster preflight regression|V3,V8,V32,V44,V59,V65,V67,I.ui.access,I.api.routing,I.authority,I.verify
 T41|x|detect/bind/recheck live Patroni scope; gate CLI topology before first mutation; add Automation regressions|V5,V22,V23,V29,V37,V45,V68,I.automation,I.authority,I.verify
 T42|x|strip Console scope extra-var; enforce live-scope precedence + diagnostics; regress|V5,V22,V23,V29,V37,V45,V68,I.automation,I.authority,I.verify
+T43|x|prepare immutable `2.9.0-management.9` live-scope precedence hotfix release set|V11,V12,V14,V15,V46,V47,V52,V55,V68,I.image,I.release,I.release.manifest,I.verify
 
 ## §B
 
