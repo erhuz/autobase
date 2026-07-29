@@ -170,7 +170,7 @@ T37|x|bind restore evidence to verified isolated restore/PITR completion|V17,V26
 T38|x|bind query-analytics primary routes → desired/Automation; add pre-mutation guards + regressions|V22,V24,V32,V36,V37,V65,I.automation.query,I.authority,I.verify
 T39|x|stack Overview Coordination & routing replicas 1/row + regression|V11,V56,V57,V66,I.ui.health,I.verify
 T40|x|add Access routing editor + validated routing API + imported-cluster preflight regression|V3,V8,V32,V44,V59,V65,V67,I.ui.access,I.api.routing,I.authority,I.verify
-T41|.|detect/bind/recheck live Patroni scope; gate CLI topology before first mutation; add Automation regressions|V5,V22,V23,V29,V37,V45,V68,I.automation,I.authority,I.verify
+T41|x|detect/bind/recheck live Patroni scope; gate CLI topology before first mutation; add Automation regressions|V5,V22,V23,V29,V37,V45,V68,I.automation,I.authority,I.verify
 
 ## §B
 
@@ -266,3 +266,5 @@ B88|2026-07-29|query-analytics desired/launch omitted `operation_primary_routing
 B89|2026-07-29|T38 required stored primary routing but imported-cluster Access/API exposed connection metadata read-only|V67
 B90|2026-07-29|release E2E required plaintext password reveal removed by T40|V67
 B91|2026-07-29|rolling update assumed Console name = live Patroni scope; CLI queried empty DCS path after replica updates|V68
+B92|2026-07-29|Automation contract doubled nested quote literals; valid leader gate source failed exact-string assertion|V45
+B93|2026-07-29|Automation contract templated literal scope argv without runtime vars; assertion operand became undefined|V45
