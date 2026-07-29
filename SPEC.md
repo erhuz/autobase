@@ -125,6 +125,7 @@ V64: DB/Docker diagnostic logging accepts typed-nil args + absent `CtxCidKey`; p
 V65: query analytics enable|disable → preflight-bound primary routes ! nonempty; launch passes `operation_primary_routing_targets`; Automation validates before config/service mutation; each serial restart stage verifies ∀ route writable; absent|changed input → stop pre-mutation.
 V66: Overview Coordination & routing replica list → ∀ replica own stacked row; `; ` separator ⊥; existing member detail + `—` empty state preserved.
 V67: imported-cluster Access routing edit → Console DB only; resulting primary ≥1 valid hostname|IP + port ∈ `1..65535`; optional role `null` → remove; omitted role unchanged; unrelated `connection_info` preserved; managed-cluster contact/mutation + plaintext credential input/API output ⊥.
+V68: ∀ Automation-backed Patroni mutation → live scope from current Patroni response; all healthy members agree; bind + recheck before first mutation; CLI DCS @ scope = 1 leader + all expected members; Console name as scope ⊥.
 
 ## §T
 
@@ -169,6 +170,7 @@ T37|x|bind restore evidence to verified isolated restore/PITR completion|V17,V26
 T38|x|bind query-analytics primary routes → desired/Automation; add pre-mutation guards + regressions|V22,V24,V32,V36,V37,V65,I.automation.query,I.authority,I.verify
 T39|x|stack Overview Coordination & routing replicas 1/row + regression|V11,V56,V57,V66,I.ui.health,I.verify
 T40|x|add Access routing editor + validated routing API + imported-cluster preflight regression|V3,V8,V32,V44,V59,V65,V67,I.ui.access,I.api.routing,I.authority,I.verify
+T41|.|detect/bind/recheck live Patroni scope; gate CLI topology before first mutation; add Automation regressions|V5,V22,V23,V29,V37,V45,V68,I.automation,I.authority,I.verify
 
 ## §B
 
@@ -263,3 +265,4 @@ B87|2026-07-28|Automation gate used forbidden destructive temp cleanup; syntax c
 B88|2026-07-29|query-analytics desired/launch omitted `operation_primary_routing_targets` required by shared restart verifier; operation failed after first replica restart|V65
 B89|2026-07-29|T38 required stored primary routing but imported-cluster Access/API exposed connection metadata read-only|V67
 B90|2026-07-29|release E2E required plaintext password reveal removed by T40|V67
+B91|2026-07-29|rolling update assumed Console name = live Patroni scope; CLI queried empty DCS path after replica updates|V68
