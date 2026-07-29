@@ -1,7 +1,7 @@
 ---
 services:
   autobase-console-api:
-    image: ghcr.io/erhuz/console_api:2.9.0-management.7
+    image: ghcr.io/erhuz/console_api:2.9.0-management.8
     container_name: autobase-console-api
     healthcheck:
       test: ["CMD", "curl", "-fsS",
@@ -26,7 +26,7 @@ services:
       - autobase
 
   autobase-console-ui:
-    image: ghcr.io/erhuz/console_ui:2.9.0-management.7
+    image: ghcr.io/erhuz/console_ui:2.9.0-management.8
     container_name: autobase-console-ui
     ports:
       - 80:80

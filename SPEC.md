@@ -268,3 +268,4 @@ B90|2026-07-29|release E2E required plaintext password reveal removed by T40|V67
 B91|2026-07-29|rolling update assumed Console name = live Patroni scope; CLI queried empty DCS path after replica updates|V68
 B92|2026-07-29|Automation contract doubled nested quote literals; valid leader gate source failed exact-string assertion|V45
 B93|2026-07-29|Automation contract templated literal scope argv without runtime vars; assertion operand became undefined|V45
+B94|2026-07-29|release metadata probe piped boolean into `startswith`; later command masked jq failure with exit 0|V55
