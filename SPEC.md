@@ -262,3 +262,4 @@ B86|2026-07-28|typed-nil backup timestamps panicked SQL trace; CID-less deferred
 B87|2026-07-28|Automation gate used forbidden destructive temp cleanup; syntax checks never started|V45
 B88|2026-07-29|query-analytics desired/launch omitted `operation_primary_routing_targets` required by shared restart verifier; operation failed after first replica restart|V65
 B89|2026-07-29|T38 required stored primary routing but imported-cluster Access/API exposed connection metadata read-only|V67
+B90|2026-07-29|release E2E required plaintext password reveal removed by T40|V67

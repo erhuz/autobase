@@ -189,8 +189,9 @@ test('management v1 shows recoverability, guards analytics, and preserves audit 
   await expect(page).toHaveURL('/clusters/5/access');
   await expect(page.getByRole('heading', { name: 'Connection details' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Management access' })).toBeVisible();
-  await page.getByRole('button', { name: 'Show password' }).click();
-  await expect(page.getByText('fixture-password')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show password' })).toHaveCount(0);
+  await expect(page.getByText('fixture-password')).toHaveCount(0);
+  await expect(page.getByLabel('Primary addresses')).toBeVisible();
   for (const [label, option] of [
     ['PostgreSQL superuser', 'postgres-superuser'],
     ['PostgreSQL replication', 'postgres-replication'],
