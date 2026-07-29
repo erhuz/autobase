@@ -247,7 +247,7 @@ func (h *guardedOperationsHandler) operationInputs(ctx context.Context, clusterI
 	case storage.OperationTypeQueryAnalyticsEnable, storage.OperationTypeQueryAnalyticsDisable:
 		state, _ := queryAnalyticsState(operationType)
 		playbook = queryAnalyticsPlaybook
-		envs, extraVars, err = h.queryAnalyticsOperationInputs(ctx, clusterInfo, state)
+		envs, extraVars, err = h.queryAnalyticsOperationInputs(ctx, clusterInfo, state, desired)
 	case storage.OperationTypeNodeAdd, storage.OperationTypeNodeRemove, storage.OperationTypeConfigUpdate:
 		playbook = lifecyclePlaybook
 		envs, extraVars, err = h.lifecycleOperationInputs(ctx, clusterInfo, operationType, desired)

@@ -26,6 +26,7 @@
           - postgresql_version | int >= 14
           - postgresql_version | int <= 18
           - groups.get('postgres_cluster', []) | length >= 3
+          - operation_primary_routing_targets | default([]) | length > 0
           - query_analytics_monitor_username is match('^[a-z_][a-z0-9_]{0,62}$')
           - query_analytics_state == 'disabled' or query_analytics_monitor_password | default('') | length >= 24
           - query_analytics_state == 'disabled' or query_analytics_collector_cidrs | default([]) | length > 0

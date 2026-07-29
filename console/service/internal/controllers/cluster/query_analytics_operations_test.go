@@ -85,6 +85,10 @@ func (s *guardedOperationStorage) GetSecretVal(_ context.Context, id int64, _ st
 	return []byte(`{"USERNAME":"postgres","PASSWORD":"service-secret"}`), nil
 }
 
+func (*guardedOperationStorage) GetQueryAnalyticsCredential(context.Context, int64, string) (string, error) {
+	return "query-analytics-test-password", nil
+}
+
 func (s *guardedOperationStorage) GetClusterServers(context.Context, int64) ([]storage.Server, error) {
 	return s.servers, nil
 }
@@ -204,7 +208,7 @@ func TestQueryAnalyticsPreflightReportsAndBlocksManagementDrift(t *testing.T) {
 	}
 	for _, required := range []string{
 		"PostgreSQL 14-18", "at least three healthy nodes", "exactly one leader",
-		"topology names resolved", "topology refreshed now",
+		"topology names resolved", "primary routing configured", "topology refreshed now",
 	} {
 		found := false
 		for _, blocker := range blockers {
@@ -224,6 +228,10 @@ func TestGuardedOperationRejectsUnsupportedAndChangedObservedState(t *testing.T)
 		cluster: &storage.Cluster{
 			ID: 5, ProjectID: 3, PostgreVersion: 16, SecretID: &credentialID,
 			PostgresSuperuserSecretID: &superuserID, PatroniRestapiSecretID: &restapiID,
+			ConnectionInfo: map[string]any{
+				"address": "primary.internal",
+				"port":    map[string]any{"primary": float64(5432)},
+			},
 		},
 		servers: []storage.Server{
 			{Name: "postgresql-1", Role: "leader", Status: "running", UpdatedAt: &now},
@@ -249,7 +257,10 @@ func TestGuardedOperationRejectsUnsupportedAndChangedObservedState(t *testing.T)
 	if _, ok := response.(*clusterapi.PostClustersIDPreflightsCreated); !ok {
 		t.Fatalf("preflight response=%#v", response)
 	}
-	store.cluster.PostgreVersion = 17
+	store.cluster.ConnectionInfo = map[string]any{
+		"address": "changed-primary.internal",
+		"port":    map[string]any{"primary": float64(5432)},
+	}
 	request := httptest.NewRequest("POST", "/clusters/5/operations", nil)
 	request = request.WithContext(context.WithValue(request.Context(), tracer.CtxCidKey{}, "test-cid"))
 	wrongConfirmation := "WRONG"
@@ -279,6 +290,10 @@ func TestGuardedOperationRecordsLaunchFailure(t *testing.T) {
 			SecretID:              &credentialID,
 			QueryAnalyticsManaged: true, QueryAnalyticsDesired: true,
 			PostgresSuperuserSecretID: &superuserID, PatroniRestapiSecretID: &restapiID,
+			ConnectionInfo: map[string]any{
+				"address": "primary.internal",
+				"port":    map[string]any{"primary": float64(5432)},
+			},
 		},
 		servers: []storage.Server{
 			{Name: "postgresql-1", Role: "leader", Status: "running", UpdatedAt: &now},
@@ -315,52 +330,79 @@ func TestGuardedOperationRecordsLaunchFailure(t *testing.T) {
 }
 
 func TestGuardedOperationLaunchesFixedAutomation(t *testing.T) {
-	now := time.Now().UTC()
-	credentialID := int64(7)
-	superuserID, restapiID := int64(8), int64(10)
-	store := &guardedOperationStorage{
-		cluster: &storage.Cluster{
-			ID: 5, ProjectID: 3, Name: "cluster-1", PostgreVersion: 16,
-			SecretID:              &credentialID,
-			QueryAnalyticsManaged: true, QueryAnalyticsDesired: true,
-			PostgresSuperuserSecretID: &superuserID, PatroniRestapiSecretID: &restapiID,
-			ExtraVars: []byte(`{"playbook":"untrusted.yml","query_analytics_state":"enabled","enable_pg_stat_monitor":true}`),
-		},
-		servers: []storage.Server{
-			{Name: "postgresql-1", Role: "leader", Status: "running", UpdatedAt: &now},
-			{Name: "postgresql-2", Role: "replica", Status: "streaming", UpdatedAt: &now},
-			{Name: "postgresql-3", Role: "replica", Status: "streaming", UpdatedAt: &now},
-		},
-		consumeOK: true,
+	for _, test := range []struct {
+		name, operationType, state string
+		current                    bool
+	}{
+		{name: "enable", operationType: storage.OperationTypeQueryAnalyticsEnable, state: "enabled"},
+		{name: "disable", operationType: storage.OperationTypeQueryAnalyticsDisable, state: "disabled", current: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			credentialID := int64(7)
+			superuserID, restapiID := int64(8), int64(10)
+			store := &guardedOperationStorage{
+				cluster: &storage.Cluster{
+					ID: 5, ProjectID: 3, Name: "cluster-1", PostgreVersion: 16,
+					SecretID:              &credentialID,
+					QueryAnalyticsManaged: true, QueryAnalyticsDesired: test.current,
+					PostgresSuperuserSecretID: &superuserID, PatroniRestapiSecretID: &restapiID,
+					ExtraVars: []byte(`{"playbook":"untrusted.yml","query_analytics_state":"enabled","enable_pg_stat_monitor":true}`),
+					ConnectionInfo: map[string]any{
+						"address": "primary.internal",
+						"port":    map[string]any{"primary": float64(5432)},
+					},
+				},
+				servers: []storage.Server{
+					{Name: "postgresql-1", Role: "leader", Status: "running", UpdatedAt: &now},
+					{Name: "postgresql-2", Role: "replica", Status: "streaming", UpdatedAt: &now},
+					{Name: "postgresql-3", Role: "replica", Status: "streaming", UpdatedAt: &now},
+				},
+				consumeOK: true,
+			}
+			docker := &operationDocker{}
+			logs := &operationLogs{}
+			handler := NewGuardedOperationsHandler(store, docker, logs, blockedPreflightWatcher{}, &configuration.Config{}, zerolog.Nop())
+			response := handler.HandlePreflight(clusterapi.PostClustersIDPreflightsParams{
+				ID: 5, HTTPRequest: httptest.NewRequest("POST", "/clusters/5/preflights", nil),
+				Body: &models.RequestOperationPreflight{Type: &test.operationType},
+			})
+			if _, ok := response.(*clusterapi.PostClustersIDPreflightsCreated); !ok {
+				t.Fatalf("preflight response=%#v", response)
+			}
+			request := httptest.NewRequest("POST", "/clusters/5/operations", nil)
+			request = request.WithContext(context.WithValue(request.Context(), tracer.CtxCidKey{}, "test-cid"))
+			response = handler.HandleOperation(clusterapi.PostClustersIDOperationsParams{
+				ID: 5, HTTPRequest: request,
+				Body: &models.RequestOperationStart{PreflightID: &store.preflight.ID, Confirmation: &store.preflight.Confirmation},
+			})
+			if _, ok := response.(*clusterapi.PostClustersIDOperationsAccepted); !ok {
+				t.Fatalf("operation response=%#v", response)
+			}
+			var extraVars map[string]any
+			if err := json.Unmarshal([]byte(docker.config.ExtraVars), &extraVars); err != nil {
+				t.Fatal(err)
+			}
+			routing, _ := extraVars["operation_primary_routing_targets"].([]any)
+			var route map[string]any
+			if len(routing) == 1 {
+				route, _ = routing[0].(map[string]any)
+			}
+			if docker.config.Playbook != queryAnalyticsPlaybook || extraVars["query_analytics_state"] != test.state ||
+				extraVars["enable_pg_stat_monitor"] != (test.state == "enabled") || len(routing) != 1 ||
+				route["address"] != "primary.internal" || route["port"] != float64(5432) ||
+				docker.calls != 1 || logs.calls != 1 || len(store.updates) != 1 ||
+				store.updates[0].Status == nil || *store.updates[0].Status != storage.OperationStatusRunning {
+				t.Fatalf("config=%+v vars=%+v docker=%d logs=%d updates=%+v", docker.config, extraVars, docker.calls, logs.calls, store.updates)
+			}
+		})
 	}
-	docker := &operationDocker{}
-	logs := &operationLogs{}
-	handler := NewGuardedOperationsHandler(store, docker, logs, blockedPreflightWatcher{}, &configuration.Config{}, zerolog.Nop())
-	operationType := storage.OperationTypeQueryAnalyticsDisable
-	response := handler.HandlePreflight(clusterapi.PostClustersIDPreflightsParams{
-		ID: 5, HTTPRequest: httptest.NewRequest("POST", "/clusters/5/preflights", nil),
-		Body: &models.RequestOperationPreflight{Type: &operationType},
-	})
-	if _, ok := response.(*clusterapi.PostClustersIDPreflightsCreated); !ok {
-		t.Fatalf("preflight response=%#v", response)
-	}
-	request := httptest.NewRequest("POST", "/clusters/5/operations", nil)
-	request = request.WithContext(context.WithValue(request.Context(), tracer.CtxCidKey{}, "test-cid"))
-	response = handler.HandleOperation(clusterapi.PostClustersIDOperationsParams{
-		ID: 5, HTTPRequest: request,
-		Body: &models.RequestOperationStart{PreflightID: &store.preflight.ID, Confirmation: &store.preflight.Confirmation},
-	})
-	if _, ok := response.(*clusterapi.PostClustersIDOperationsAccepted); !ok {
-		t.Fatalf("operation response=%#v", response)
-	}
-	var extraVars map[string]any
-	if err := json.Unmarshal([]byte(docker.config.ExtraVars), &extraVars); err != nil {
-		t.Fatal(err)
-	}
-	if docker.config.Playbook != queryAnalyticsPlaybook || extraVars["query_analytics_state"] != "disabled" ||
-		extraVars["enable_pg_stat_monitor"] != false || docker.calls != 1 || logs.calls != 1 ||
-		len(store.updates) != 1 || store.updates[0].Status == nil ||
-		*store.updates[0].Status != storage.OperationStatusRunning {
-		t.Fatalf("config=%+v vars=%+v docker=%d logs=%d updates=%+v", docker.config, extraVars, docker.calls, logs.calls, store.updates)
+}
+
+func TestQueryAnalyticsOperationInputsRejectsMissingRouting(t *testing.T) {
+	handler := NewGuardedOperationsHandler(nil, nil, nil, nil, &configuration.Config{}, zerolog.Nop())
+	desired := []byte(`{"managed":true,"state":"disabled","extension_version":"2.3.2"}`)
+	if _, _, err := handler.queryAnalyticsOperationInputs(context.Background(), &storage.Cluster{}, "disabled", desired); err == nil {
+		t.Fatal("missing routing was accepted")
 	}
 }

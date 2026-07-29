@@ -68,6 +68,8 @@
           - comment_setting in operation_playbook
           - exact_version in operation_playbook
           - restart_import in operation_playbook
+          - primary_routing_guard in operation_playbook
+          - primary_routing_guard in restart_playbook
           - serial_restart in restart_playbook
           - switchover in restart_playbook
           - redaction in operation_playbook
@@ -84,6 +86,7 @@
         comment_setting: pg_stat_monitor.pgsm_extract_comments
         exact_version: "pg_stat_monitor_version | default('2.3.2')"
         restart_import: "import_playbook: restart_pgcluster.yml"
+        primary_routing_guard: "operation_primary_routing_targets | default([]) | length > 0"
         serial_restart: "serial: 1"
         switchover: "tasks_from: switchover"
         redaction: "no_log: true"

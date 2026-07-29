@@ -32,9 +32,20 @@ type topologyNode struct {
 	Timeline *int64 `json:"timeline,omitempty"`
 }
 
+type queryAnalyticsDesired struct {
+	Managed          bool                     `json:"managed"`
+	State            string                   `json:"state"`
+	ExtensionVersion string                   `json:"extension_version"`
+	Routing          []operationRoutingTarget `json:"routing"`
+}
+
 func (h *guardedOperationsHandler) queryAnalyticsPreflightState(ctx context.Context, clusterInfo *storage.Cluster, operationType string) (*guardedPreflight, error) {
 	refreshStarted := time.Now().UTC().Add(-2 * time.Second)
 	h.clusterWatcher.HandleCluster(ctx, clusterInfo)
+	clusterInfo, err := h.db.GetCluster(ctx, clusterInfo.ID)
+	if err != nil {
+		return nil, err
+	}
 	servers, err := h.db.GetClusterServers(ctx, clusterInfo.ID)
 	if err != nil {
 		return nil, err
@@ -54,12 +65,14 @@ func (h *guardedOperationsHandler) queryAnalyticsPreflightState(ctx context.Cont
 	for _, node := range nodes {
 		allNamed = allNamed && node.Name != ""
 	}
+	routing := primaryRoutingTargets(clusterInfo.ConnectionInfo)
 	checks := []preflightCheck{
 		{Name: "PostgreSQL 14-18", OK: clusterInfo.PostgreVersion >= 14 && clusterInfo.PostgreVersion <= 18},
 		{Name: "at least three healthy nodes", OK: healthyCount >= 3},
 		{Name: "all nodes healthy", OK: healthyCount == len(nodes)},
 		{Name: "exactly one leader", OK: leaderCount == 1},
 		{Name: "topology names resolved", OK: len(nodes) >= 3 && allNamed},
+		{Name: "primary routing configured", OK: len(routing) > 0},
 		{Name: "topology refreshed now", OK: topologyFresh(servers, refreshStarted)},
 		{Name: "no active cluster mutation", OK: !active},
 		{Name: "state change required", OK: clusterInfo.QueryAnalyticsDesired != targetEnabled},
@@ -81,9 +94,11 @@ func (h *guardedOperationsHandler) queryAnalyticsPreflightState(ctx context.Cont
 	observed := map[string]any{
 		"managed": clusterInfo.QueryAnalyticsManaged, "desired": clusterInfo.QueryAnalyticsDesired,
 		"postgres_version": clusterInfo.PostgreVersion, "healthy_nodes": healthyCount,
-		"node_count": len(nodes), "topology": nodes,
+		"node_count": len(nodes), "topology": nodes, "routing": routing,
 	}
-	desired := map[string]any{"managed": true, "state": state, "extension_version": "2.3.2"}
+	desired := queryAnalyticsDesired{
+		Managed: true, State: state, ExtensionVersion: "2.3.2", Routing: routing,
+	}
 	hash, err := topologyHash(nodes)
 	if err != nil {
 		return nil, err
@@ -105,7 +120,12 @@ func queryAnalyticsState(operationType string) (string, bool) {
 	}
 }
 
-func (h *guardedOperationsHandler) queryAnalyticsOperationInputs(ctx context.Context, clusterInfo *storage.Cluster, state string) ([]string, []byte, error) {
+func (h *guardedOperationsHandler) queryAnalyticsOperationInputs(ctx context.Context, clusterInfo *storage.Cluster, state string, desired []byte) ([]string, []byte, error) {
+	var requested queryAnalyticsDesired
+	if json.Unmarshal(desired, &requested) != nil || !requested.Managed || requested.State != state ||
+		requested.ExtensionVersion != "2.3.2" || len(requested.Routing) == 0 {
+		return nil, nil, errors.New("query analytics desired state is invalid")
+	}
 	envs, extraVars, err := h.baseOperationInputs(ctx, clusterInfo)
 	if err != nil {
 		return nil, nil, err
@@ -116,6 +136,7 @@ func (h *guardedOperationsHandler) queryAnalyticsOperationInputs(ctx context.Con
 	extraVars["query_analytics_monitor_username"] = h.cfg.QueryAnalytics.Username
 	extraVars["query_analytics_collector_cidrs"] = h.cfg.QueryAnalytics.CollectorCIDRs
 	extraVars["patroni_cluster_name"] = clusterInfo.Name
+	extraVars["operation_primary_routing_targets"] = requested.Routing
 
 	if state == "enabled" {
 		password, err := h.db.GetQueryAnalyticsCredential(ctx, clusterInfo.ID, h.cfg.EncryptionKey)

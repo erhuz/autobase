@@ -121,6 +121,7 @@ V61: Automation launch name empty → Docker assigns uniqueness; lifecycle uses 
 V62: backup observer read-only; duplicate scheduler owners visible + backup mutation blocked; guarded `backup_scheduler_reconcile` reuses pgBackRest role → cron only on `pgbackrest_scheduler_host`; arbitrary cron/playbook vars ⊥.
 V63: `restore_tested_at` updated only after successful isolated restore/PITR final verification; configured/operator timestamp alone ⊥; absent evidence → recoverability degraded.
 V64: DB/Docker diagnostic logging accepts typed-nil args + absent `CtxCidKey`; panic ⊥; operation flow unchanged; Docker bodies/secrets ⊥ logs.
+V65: query analytics enable|disable → preflight-bound primary routes ! nonempty; launch passes `operation_primary_routing_targets`; Automation validates before config/service mutation; each serial restart stage verifies ∀ route writable; absent|changed input → stop pre-mutation.
 
 ## §T
 
@@ -162,6 +163,7 @@ T34|x|use Docker-assigned Automation names; make DB/Docker logging panic-safe; v
 T35|x|derive DCS reachability from existing Patroni watcher evidence + health/UI contract|V16,V23,V32,V60,I.api.health,I.authority,I.verify
 T36|x|add guarded pgBackRest scheduler reconcile via existing role + duplicate-owner contract|V4,V17,V21,V22,V26,V27,V32,V54,V62,I.api.preflight,I.api.run,I.op.v1,I.authority,I.automation,I.verify
 T37|x|bind restore evidence to verified isolated restore/PITR completion|V17,V26,V30,V32,V63,I.api.health,I.authority,I.automation,I.verify
+T38|x|bind query-analytics primary routes → desired/Automation; add pre-mutation guards + regressions|V22,V24,V32,V36,V37,V65,I.automation.query,I.authority,I.verify
 
 ## §B
 
@@ -253,3 +255,4 @@ B84|2026-07-28|finite app-generated Docker names collided; backup observer stopp
 B85|2026-07-28|pgBackRest scheduler cron remained on every member; concurrent jobs raced repository locks|V62
 B86|2026-07-28|typed-nil backup timestamps panicked SQL trace; CID-less deferred Docker cleanup panicked before DELETE → exited containers accumulated|V61,V64
 B87|2026-07-28|Automation gate used forbidden destructive temp cleanup; syntax checks never started|V45
+B88|2026-07-29|query-analytics desired/launch omitted `operation_primary_routing_targets` required by shared restart verifier; operation failed after first replica restart|V65
